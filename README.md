@@ -1,0 +1,1 @@
+ESP32 based enviromental data acquisition board. Once up and running it (should) wake up, acquire some data, publish it with MQTT and go back to sleep.

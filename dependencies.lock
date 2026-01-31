@@ -9,16 +9,6 @@ dependencies:
       registry_url: https://components.espressif.com
       type: service
     version: 1.9.1
-  espressif/mqtt:
-    component_hash: ffdad5659706b4dc14bc63f8eb73ef765efa015bf7e9adf71c813d52a2dc9342
-    dependencies:
-    - name: idf
-      require: private
-      version: '>=5.3'
-    source:
-      registry_url: https://components.espressif.com/
-      type: service
-    version: 1.0.0
   idf:
     source:
       type: idf
@@ -67,9 +57,8 @@ dependencies:
     - esp32h2
     version: 1.1.0
 direct_dependencies:
-- espressif/mqtt
 - idf
 - tuanpmt/esp_wifi_manager
-manifest_hash: 7d10bd42ca4b180fe8bb44bbb430287b1719569040bb51306ce942adaf91d8b2
+manifest_hash: 9e315c12b11f75607c0e4ba4164acdb0839928fa2d984fb5a4f582babb2c00a5
 target: esp32
 version: 2.0.0

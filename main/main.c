@@ -13,17 +13,26 @@
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "driver/gpio.h"
 #include "esp_log.h"
 #include "wifiLogin.h"
 #include "esp_wifi_manager.h"
+#include "nvs.h"
+#include "nvs_flash.h"
 
 static const char *TAG = "WiFi_Body";
+
+
+
 
 
 void app_main(void)
 {
     WiFi_Login();
+
+    ESP_LOGI(TAG, "In the main loooop");
     wifi_status_t status;
+
     while (1)
     {
         vTaskDelay(pdMS_TO_TICKS(5000));  // Main loop delay
@@ -37,5 +46,10 @@ void app_main(void)
     }
 
     //MQTT publisher setup
-
+    while(1)
+    {
+        vTaskDelay(pdMS_TO_TICKS(5000));
+        WiFi_Get_Status(&status);
+        ESP_LOGI(TAG, "WiFi connected, signal %d. Looping through.", status.quality);
+    }
 }

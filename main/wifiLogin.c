@@ -7,11 +7,24 @@
 #include "esp_wifi_manager.h"
 #include "esp_bus.h"
 
-#define DEF_WIFI_NAME ""
-#define DEF_WIFI_PASS ""
+#include "driver/gpio.h"
 
+static const char *TAG = "wifi_Login";
 
-static const char *TAG = "WiFi_Login";
+#define FACTORY_RESET_PIN GPIO_NUM_22
+
+/**
+ * @brief Initialize the pin defined for the reset button. Initializes as an input-pullup
+ */
+void reset_pin_init()
+{
+    gpio_config_t Factory_Reset_Pin = {
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pin_bit_mask = 1ULL << FACTORY_RESET_PIN
+    };
+    gpio_config(&Factory_Reset_Pin);
+}
 
 /**
  * @brief Callback for WiFi connected event
@@ -60,25 +73,6 @@ static void on_var_changed(const char *event, const void *data, size_t len, void
     ESP_LOGI(TAG, "Variable changed: %s = %s", var->key, var->value);
 }
 
-/**
- *  @brief Check if WiFi is connected
- */
-bool WiFi_Connected()
-{
-    return wifi_manager_is_connected();
-}
-
-/**
- *  @brief Get current WiFi status
- */
-esp_err_t WiFi_Get_Status(wifi_status_t* status)
-{
-    return wifi_manager_get_status(status);
-}
-
-/**
- *  @brief Initialize and connect to WiFi. If no known networks, start captive portal. 
- */
 void WiFi_Login(void)
 {
     // Initialize NVS
@@ -89,7 +83,7 @@ void WiFi_Login(void)
     }
     ESP_ERROR_CHECK(ret);
 
-    ESP_LOGI(TAG, "Starting WiFi Manager example");
+    ESP_LOGI(TAG, "Starting WiFi Manager");
 
     // Initialize esp_bus first (required by wifi_manager)
     ret = esp_bus_init();
@@ -104,13 +98,30 @@ void WiFi_Login(void)
     esp_bus_sub(WIFI_EVT(WIFI_MGR_EVT_GOT_IP), on_wifi_got_ip, NULL);
     esp_bus_sub(WIFI_EVT(WIFI_MGR_EVT_VAR_CHANGED), on_var_changed, NULL);
 
-
     // Initialize WiFi Manager
     wifi_manager_config_t config = {
+        // Default networks (used if NVS is empty)
+        // You can also configure networks via REST API or captive portal
+        //.default_networks = (wifi_network_t[]){
+        //    {"BoschAP-2.4Ghz", "112358abcd", 10},      // Priority 10 (highest)
+        //},
+        //.default_network_count = 1,
+
+        // Default custom variables
+        .default_vars = (wifi_var_t[]){
+            {"device_name", "my-esp32"},
+            {"server_url", "https://api.example.com"},
+        },
+        .default_var_count = 2,
+
+        // Retry configuration
+        .max_retry_per_network = 3,
+        .retry_interval_ms = 5000,
+        .auto_reconnect = true,
 
         // SoftAP configuration (for captive portal)
         .default_ap = {
-            .ssid = "ESP_{id}",
+            .ssid = "ESP_CONFIG",
             .password = "",           // Open network for easy setup
             .channel = 0,             // Auto channel selection
             .max_connections = 4,
@@ -122,12 +133,34 @@ void WiFi_Login(void)
         },
         .enable_captive_portal = true,   // Start AP if no networks available
         .stop_ap_on_connect = true,      // Stop AP after successful connection
+
+        // HTTP REST API configuration
+        .http = {
+            .enable = true,
+            .httpd = NULL,               // Create new HTTP server
+            .api_base_path = "/api/wifi",
+            .enable_auth = false,        // No authentication for this example
+        },
     };
 
     ret = wifi_manager_init(&config);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize WiFi Manager: %s", esp_err_to_name(ret));
         return;
+    }
+
+    reset_pin_init();
+
+    if (gpio_get_level(FACTORY_RESET_PIN) == 0) {
+        ESP_LOGW(TAG, "Factory reset requested, depress button to execute.");
+        
+        while(gpio_get_level(FACTORY_RESET_PIN) == 0)
+            vTaskDelay(pdMS_TO_TICKS(100));
+
+        wifi_manager_factory_reset();
+        ESP_LOGW(TAG, "Factory reset executed");
+        vTaskDelay(pdMS_TO_TICKS(100));
+        esp_restart();
     }
 
     ESP_LOGI(TAG, "WiFi Manager initialized");
@@ -140,9 +173,27 @@ void WiFi_Login(void)
     if (ret == ESP_OK) {
         ESP_LOGI(TAG, "WiFi connected successfully!");
 
+        // Get HTTP server handle to add custom endpoints
+        httpd_handle_t httpd = wifi_manager_get_httpd();
+        if (httpd) {
+            ESP_LOGI(TAG, "HTTP server handle available for custom endpoints");
+            // You can register additional endpoints here:
+            // httpd_uri_t my_uri = { ... };
+            // httpd_register_uri_handler(httpd, &my_uri);
+        }
     } else {
         ESP_LOGW(TAG, "WiFi connection timeout - captive portal should be active");
         ESP_LOGI(TAG, "Connect to AP '%s' and configure WiFi via http://192.168.4.1/api/wifi/",
                  config.default_ap.ssid);
     }
+}
+
+bool WiFi_Connected(void)
+{
+    return wifi_manager_is_connected();
+}
+
+esp_err_t WiFi_Get_Status(wifi_status_t* status)
+{
+    return wifi_manager_get_status(status);
 }
