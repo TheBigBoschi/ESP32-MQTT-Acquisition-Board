@@ -15,4 +15,4 @@ dependencies:
   #   # All dependencies of `main` are public by default.
   #   public: true
   tuanpmt/esp_wifi_manager: ^1.1.0
-  #espressif/mqtt: '>=1.0.0'
+  espressif/mqtt: "*"
