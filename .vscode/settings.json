@@ -17,5 +17,6 @@
     "--query-driver=**",
     "--compile-commands-dir=/home/boschi/Desktop/Mega/ESP32 - Enviromental Data Acquisition Board/ESP32 MQTT Acquisition Board/build"
   ],
-  "idf.flashType": "UART"
+  "idf.flashType": "UART",
+  "idf.currentSetup": "/home/boschi/.espressif/v5.5.2/esp-idf"
 }

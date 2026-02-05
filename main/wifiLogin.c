@@ -100,14 +100,6 @@ void WiFi_Login(void)
 
     // Initialize WiFi Manager
     wifi_manager_config_t config = {
-        // Default networks (used if NVS is empty)
-        // You can also configure networks via REST API or captive portal
-        //.default_networks = (wifi_network_t[]){
-        //    {"BoschAP-2.4Ghz", "112358abcd", 10},      // Priority 10 (highest)
-        //},
-        //.default_network_count = 1,
-
-        // Default custom variables
         .default_vars = (wifi_var_t[]){
             {"device_name", "my-esp32"},
             {"server_url", "https://api.example.com"},
