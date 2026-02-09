@@ -6,6 +6,8 @@
 #include "nvs_flash.h"
 #include "esp_wifi_manager.h"
 #include "esp_bus.h"
+#include "esp_wifi.h"
+
 
 #include "driver/gpio.h"
 
@@ -127,7 +129,6 @@ void WiFi_Login(void)
         return;
     }
 
-
     ESP_LOGI(TAG, "WiFi Manager initialized");
     ESP_LOGI(TAG, "HTTP API available at http://<device-ip>/api/wifi/");
 
@@ -161,4 +162,18 @@ bool WiFi_Connected(void)
 esp_err_t WiFi_Get_Status(wifi_status_t* status)
 {
     return wifi_manager_get_status(status);
+}
+
+/*
+void WiFi_Factory_Reset()
+{
+    wifi_manager_init();
+    ESP_LOGW("wifi_manager","wifi_manager_factory_reset called");
+    wifi_manager_factory_reset();
+}
+    */
+void WiFi_Factory_Reset()
+{
+    wifi_manager_factory_reset();
+    esp_restart();
 }

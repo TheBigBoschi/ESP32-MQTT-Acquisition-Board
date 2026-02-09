@@ -22,6 +22,8 @@ bool WiFi_Connected(void);
  * Returns IP, Gateway, Netmask, DNS, MAC, RSSI, channel, hostname, etc.
  * 
  * @param[out] status Output status structure
- * @return ESP_OK on success
+ * @return ESP_OK on success\
  */
 esp_err_t WiFi_Get_Status(wifi_status_t* status);
+
+void WiFi_Factory_Reset(void);

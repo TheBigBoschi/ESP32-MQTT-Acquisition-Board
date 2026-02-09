@@ -23,11 +23,12 @@
 #include "nvs_flash.h"
 #include "mqtt_client.h"
 #include "esp_netif.h"
+#include "esp_bus.h"
 
 #include "esp_wifi.h"
 #include "wifiFastConnect.h"
 
-#define FACTORY_RESET_PIN GPIO_NUM_22
+#define FACTORY_RESET_PIN GPIO_NUM_12
 static const char *TAG = "WiFi_Body";
 
 /**
@@ -80,13 +81,26 @@ void app_main(void)
         while(gpio_get_level(FACTORY_RESET_PIN) == 0)
             vTaskDelay(pdMS_TO_TICKS(100));
 
-        wifi_manager_factory_reset();
         esp_wifi_restore();
+        ESP_LOGW(TAG, "wifi restore executed");
+        esp_bus_init();
+        wifi_manager_init(NULL);
+        ESP_LOGW(TAG, "esp manager init");
+        //WiFi_Factory_Reset();
+        wifi_manager_factory_reset();
+        //nvs_flash_erase();
         ESP_LOGW(TAG, "Factory reset executed");
-        vTaskDelay(pdMS_TO_TICKS(100));
+        vTaskDelay(pdMS_TO_TICKS(3000));
         esp_restart();
     }
 
+    /*
+    ESP_LOGW(TAG, "Credentials reset");
+    wifi_manager_factory_reset();
+    ESP_LOGW(TAG, "Credentials resetted");
+    vTaskDelay(pdMS_TO_TICKS(3000));
+    
+    */
     ESP_ERROR_CHECK(esp_wifi_get_config(WIFI_IF_STA, &config));
 
     if (strlen((char *)config.sta.ssid)) {
@@ -99,19 +113,17 @@ void app_main(void)
         WiFi_Login();
     }
 
-
-
     ESP_LOGI(TAG, "In the main loooop");
-    wifi_status_t status;
+    wifi_ap_record_t ap_record;
 
     while (1)
     {
         vTaskDelay(pdMS_TO_TICKS(5000));  // Main loop delay
-        ESP_LOGI(TAG, "WiFi Status: %s", WiFi_Get_Status(&status) == ESP_OK ? "Connected" : "Disconnected");
-        if(WiFi_Get_Status(&status) == ESP_OK)
+        ESP_LOGI(TAG, "WiFi Status: %s", esp_wifi_sta_get_ap_info(&ap_record) == ESP_OK ? "Connected" : "Disconnected");
+        if(esp_wifi_sta_get_ap_info(&ap_record) == ESP_OK)
         {
-            ESP_LOGI(TAG, "Connected to %s - Signal: %d%% - Uptime: %lu ms",status.ssid, status.quality, (unsigned long)status.uptime_ms);
-            if(status.uptime_ms > 1000)
+            ESP_LOGI(TAG, "Connected to %s - Signal: %d%% - Uptime:",ap_record.ssid, ap_record.rssi);
+            vTaskDelay(pdMS_TO_TICKS(1000));
                 break;
         }
     }
@@ -121,8 +133,8 @@ void app_main(void)
     while(1)
     {
         vTaskDelay(pdMS_TO_TICKS(5000));
-        WiFi_Get_Status(&status);
-        ESP_LOGI(TAG, "WiFi connected, signal %d. Looping through.", status.quality);
+        esp_wifi_sta_get_ap_info(&ap_record);
+        ESP_LOGI(TAG, "WiFi connected, signal %d. Looping through.", ap_record.rssi);
         MQTT_Config();
 
         char string[10];
