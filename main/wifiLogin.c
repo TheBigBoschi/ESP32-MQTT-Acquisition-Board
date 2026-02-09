@@ -11,20 +11,6 @@
 
 static const char *TAG = "wifi_Login";
 
-#define FACTORY_RESET_PIN GPIO_NUM_22
-
-/**
- * @brief Initialize the pin defined for the reset button. Initializes as an input-pullup
- */
-void reset_pin_init()
-{
-    gpio_config_t Factory_Reset_Pin = {
-        .mode = GPIO_MODE_INPUT,
-        .pull_up_en = GPIO_PULLUP_ENABLE,
-        .pin_bit_mask = 1ULL << FACTORY_RESET_PIN
-    };
-    gpio_config(&Factory_Reset_Pin);
-}
 
 /**
  * @brief Callback for WiFi connected event
@@ -141,19 +127,6 @@ void WiFi_Login(void)
         return;
     }
 
-    reset_pin_init();
-
-    if (gpio_get_level(FACTORY_RESET_PIN) == 0) {
-        ESP_LOGW(TAG, "Factory reset requested, depress button to execute.");
-        
-        while(gpio_get_level(FACTORY_RESET_PIN) == 0)
-            vTaskDelay(pdMS_TO_TICKS(100));
-
-        wifi_manager_factory_reset();
-        ESP_LOGW(TAG, "Factory reset executed");
-        vTaskDelay(pdMS_TO_TICKS(100));
-        esp_restart();
-    }
 
     ESP_LOGI(TAG, "WiFi Manager initialized");
     ESP_LOGI(TAG, "HTTP API available at http://<device-ip>/api/wifi/");

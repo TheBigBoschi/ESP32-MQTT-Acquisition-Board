@@ -24,13 +24,82 @@
 #include "mqtt_client.h"
 #include "esp_netif.h"
 
+#include "esp_wifi.h"
+#include "wifiFastConnect.h"
 
-
+#define FACTORY_RESET_PIN GPIO_NUM_22
 static const char *TAG = "WiFi_Body";
+
+/**
+ * @brief Initialize the pin defined for the reset button. Initializes as an input-pullup
+ */
+void reset_pin_init()
+{
+    gpio_config_t Factory_Reset_Pin = {
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pin_bit_mask = 1ULL << FACTORY_RESET_PIN
+    };
+    gpio_config(&Factory_Reset_Pin);
+}
 
 void app_main(void)
 {
-    WiFi_Login();
+
+    //Initialize NVS
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+      ESP_ERROR_CHECK(nvs_flash_erase());
+      ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+    
+    // Minimal network stack init (required by WiFi)
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+
+    // Create default STA interface
+    esp_netif_create_default_wifi_sta();
+
+    // Init WiFi driver
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
+    // Required before calling esp_wifi_get_config()
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+
+    // Read stored configuration
+    wifi_config_t config;
+    memset(&config, 0, sizeof(config));
+
+    reset_pin_init();
+
+    if (gpio_get_level(FACTORY_RESET_PIN) == 0) {
+        ESP_LOGW(TAG, "Factory reset requested, depress button to execute.");
+        
+        while(gpio_get_level(FACTORY_RESET_PIN) == 0)
+            vTaskDelay(pdMS_TO_TICKS(100));
+
+        wifi_manager_factory_reset();
+        esp_wifi_restore();
+        ESP_LOGW(TAG, "Factory reset executed");
+        vTaskDelay(pdMS_TO_TICKS(100));
+        esp_restart();
+    }
+
+    ESP_ERROR_CHECK(esp_wifi_get_config(WIFI_IF_STA, &config));
+
+    if (strlen((char *)config.sta.ssid)) {
+        ESP_LOGW(TAG, "Stored SSID: %s", (char *)config.sta.ssid);
+        esp_wifi_deinit();
+        wifi_Fast_Connect();
+    } else {
+        ESP_LOGW(TAG, "No WiFi credentials stored");
+        esp_wifi_deinit();
+        WiFi_Login();
+    }
+
+
 
     ESP_LOGI(TAG, "In the main loooop");
     wifi_status_t status;

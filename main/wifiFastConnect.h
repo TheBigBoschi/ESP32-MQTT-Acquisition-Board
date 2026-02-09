@@ -1,1 +1,1 @@
-int wifi_Fast_Connect();
+void wifi_Fast_Connect();
