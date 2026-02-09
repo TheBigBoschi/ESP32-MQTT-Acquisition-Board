@@ -1,4 +1,18 @@
 idf_component_register(
-    SRCS "MQTT.c" "wifiLogin.c" "main.c"
-    INCLUDE_DIRS "." "include"
+    SRCS 
+        "MQTT.c"
+        "wifiLogin.c"
+        "main.c"
+        "wifiFastConnect.c"
+    INCLUDE_DIRS 
+        "."
+        "include"
+    REQUIRES
+        esp_wifi
+        esp_netif
+        esp_event
+        nvs_flash
+        mqtt
+        esp_driver_gpio
+        tuanpmt__esp_bus
 )
