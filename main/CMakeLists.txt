@@ -4,6 +4,7 @@ idf_component_register(
         "wifiLogin.c"
         "main.c"
         "wifiFastConnect.c"
+        "sps30.c"
     INCLUDE_DIRS 
         "."
         "include"

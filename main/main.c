@@ -9,8 +9,14 @@
  * - Subscribe to WiFi events
  */
 
+#define I2C_PORT        I2C_NUM_0
+#define SDA_GPIO        GPIO_NUM_23
+#define SCL_GPIO        GPIO_NUM_22
+#define I2C_FREQ_HZ     100000
+
 #include "wifiLogin.h"
 #include "MQTT.h"
+#include "sps30.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -94,13 +100,6 @@ void app_main(void)
         esp_restart();
     }
 
-    /*
-    ESP_LOGW(TAG, "Credentials reset");
-    wifi_manager_factory_reset();
-    ESP_LOGW(TAG, "Credentials resetted");
-    vTaskDelay(pdMS_TO_TICKS(3000));
-    
-    */
     ESP_ERROR_CHECK(esp_wifi_get_config(WIFI_IF_STA, &config));
 
     if (strlen((char *)config.sta.ssid)) {
@@ -113,8 +112,29 @@ void app_main(void)
         WiFi_Login();
     }
 
-    ESP_LOGI(TAG, "In the main loooop");
     wifi_ap_record_t ap_record;
+
+    i2c_master_bus_handle_t bus_handle;
+    i2c_master_dev_handle_t dev_handle;
+    sps30_measurement_float_t sps30_measurement;
+
+    i2c_master_bus_config_t bus_config = {
+        .i2c_port = I2C_PORT,
+        .sda_io_num = SDA_GPIO,
+        .scl_io_num = SCL_GPIO,
+        .clk_source = I2C_CLK_SRC_DEFAULT,
+        .glitch_ignore_cnt = 7,
+        .flags.enable_internal_pullup = true,
+    };
+
+    ESP_ERROR_CHECK(i2c_new_master_bus(&bus_config, &bus_handle));
+    ESP_LOGI(TAG, "I2C bus initialized on port %d", I2C_PORT);
+    sps30_init(bus_handle, &dev_handle, I2C_FREQ_HZ);
+    char sps30_SN[32];
+    sps30_start_measurement_float(dev_handle);
+    sps30_read_serial_number(dev_handle,sps30_SN);
+    ESP_LOGI(TAG, "SPS30 initialized, serial number: %s", sps30_SN);
+
 
     while (1)
     {
@@ -130,15 +150,29 @@ void app_main(void)
 
     int counter = 0;
     //MQTT publisher setup
+
+    ESP_LOGI(TAG, "In the main loooop");
+
+    char MC10[8];
+    char MC2p5[8];
+    char pub_str[64];
+
     while(1)
     {
-        vTaskDelay(pdMS_TO_TICKS(5000));
-        esp_wifi_sta_get_ap_info(&ap_record);
-        ESP_LOGI(TAG, "WiFi connected, signal %d. Looping through.", ap_record.rssi);
-        MQTT_Config();
+        sps30_read_measured_values_float(dev_handle, &sps30_measurement);
+        snprintf(pub_str, sizeof(pub_str), "PM10: %.3f PM2.5: %.3f", 
+                 sps30_measurement.MC10p0, 
+                 sps30_measurement.MC2p5);
 
+        vTaskDelay(pdMS_TO_TICKS(5000));
+        
+        esp_wifi_sta_get_ap_info(&ap_record);
+        ESP_LOGI(TAG, "WiFi connected, signal %d dBm. Looping through.", ap_record.rssi);
+        MQTT_Config();
+        
         char string[10];
         MQTT_Publish("/esp32",itoa(counter, string,10),1);
+        MQTT_Publish("/esp32/var",pub_str,1);
         counter++;
         vTaskDelay(pdMS_TO_TICKS(500));
 

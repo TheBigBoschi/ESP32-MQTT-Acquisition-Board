@@ -127,5 +127,5 @@ void MQTT_Unsubscribe(char *topic){
 
 void MQTT_Publish(char *topic, char *payload,int qos){
     int msg_id = esp_mqtt_client_publish(globalClient, topic, payload, 0, qos, 0);
-    ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
+    ESP_LOGI(TAG, "sent publish successful, msg_id=%d, payload: %s", msg_id, payload);
 };
