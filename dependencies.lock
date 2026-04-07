@@ -1,6 +1,6 @@
 dependencies:
   espressif/mdns:
-    component_hash: 7c0fa01a1cd0e72a87ec1928c3b661c0a3a9034a6d3a69dcf4850db8c6f272db
+    component_hash: 1ebe3bd675bb9d1c58f52bc0b609b32f74e572b01c328f9e61282040c775495c
     dependencies:
     - name: idf
       require: private
@@ -8,7 +8,7 @@ dependencies:
     source:
       registry_url: https://components.espressif.com
       type: service
-    version: 1.10.1
+    version: 1.11.0
   espressif/mqtt:
     component_hash: ffdad5659706b4dc14bc63f8eb73ef765efa015bf7e9adf71c813d52a2dc9342
     dependencies:
@@ -23,6 +23,30 @@ dependencies:
     source:
       type: idf
     version: 5.5.2
+  k0i05/esp_ltr390uv:
+    component_hash: 4537bb42a98845426739a276a7dd3b8c395007d9ebc61388a7e5b685d938907d
+    dependencies:
+    - name: idf
+      require: private
+      version: '>5.3.0'
+    - name: k0i05/esp_type_utils
+      registry_url: https://components.espressif.com
+      require: private
+      version: '>=0.0.1'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.2.7
+  k0i05/esp_type_utils:
+    component_hash: 95d8ec40268e045f7e264d8035f451e53844b4a2f6d5f112ece6645c5effd639
+    dependencies:
+    - name: idf
+      require: private
+      version: '>5.3.0'
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    version: 1.2.7
   tuanpmt/esp_bus:
     component_hash: e78c5ae0f388a278258e4c7ca15b7e6a937e6aca0228ff49686836d2724c4727
     dependencies:
@@ -69,7 +93,8 @@ dependencies:
 direct_dependencies:
 - espressif/mqtt
 - idf
+- k0i05/esp_ltr390uv
 - tuanpmt/esp_wifi_manager
-manifest_hash: ef32de77338c63fca1cfa07bc1da759e7009f07cec7766d462d4abb2b6a04597
+manifest_hash: 89946cca62a72ac5cb54fca5203e55ee6ac2a4e0241015adce110afcf09401e0
 target: esp32
 version: 2.0.0

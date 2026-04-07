@@ -22,8 +22,7 @@ static const char *TAG = "MQTT Handler";
 
 static esp_mqtt_client_handle_t globalClient = 0;
 
-
-static void MQTT_Event_Handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
+void MQTT_Event_Handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
 {
     ESP_LOGD(TAG, "Event dispatched from event loop base=%s, event_id=%" PRIi32 "", base, event_id);
     esp_mqtt_event_handle_t event = event_data;
@@ -77,7 +76,7 @@ static void MQTT_Event_Handler(void *handler_args, esp_event_base_t base, int32_
     }
 }
 
-static void log_error_if_nonzero(const char *message, int error_code)
+void log_error_if_nonzero(const char *message, int error_code)
 {
     if (error_code != 0) {
         ESP_LOGE(TAG, "%s: 0x%x", message, error_code);
