@@ -57,6 +57,8 @@ enum EventsDefinition{
     event_AHT20__error,
     event_BMP280_read_ok,
     event_BMP280_error,
+    event_SHT40_read_ok,
+    event_SHT40_error,
     event_sensor_read_ok,
     event_sensor_error
 };
@@ -91,6 +93,14 @@ typedef struct {
     int holdup_time_ms;
     int samples;
 } bmp280_task_param_t;
+
+typedef struct {
+    i2c_master_bus_handle_t bus_handle;
+    SemaphoreHandle_t *semaphore;
+    float temperature;
+    float humidity;
+} sht40_task_param_t;
+
 //########################## functions definition ##########################
 
 /**
@@ -128,6 +138,21 @@ void reset_pin_check()
         vTaskDelay(pdMS_TO_TICKS(3000));
         esp_restart();
     }
+}
+
+uint8_t sps30_calculate_crc(uint8_t buffer[2])
+{
+    uint8_t crc = 0xFF;
+    for(int i = 0; i < 2; i++) {
+        crc ^= buffer[i];
+        for(uint8_t bit = 8; bit > 0; --bit) {
+            if(crc & 0x80)
+                crc = (crc << 1) ^ 0x31u;
+            else
+                crc = (crc << 1);
+        }
+    }
+    return crc;
 }
 
 //Maybe use a queue?
@@ -333,9 +358,52 @@ void read_ltr390_task(void *pvParameters)
     vTaskDelete(NULL);
 }
 
-void read_aht40_task(void *pvParameters)
+/**
+ * @brief FreeRTOS task to read temperature and humidity from an SHT40 sensor.
+ *
+ * This task initializes the SHT40 sensor on the I2C bus, reads temperature and humidity
+ * data, performs CRC checks, and stores the results in the provided `sht40_task_param_t` structure.
+ * It signals completion or error via an FreeRTOS event group.
+ *
+ * @param pvParameters A pointer to a `sht40_task_param_t` structure containing I2C bus handle, semaphore, and output variables.
+ */
+void read_sht40_task(void *pvParameters)
 {
+    sht40_task_param_t *params = (sht40_task_param_t*)pvParameters;
+    i2c_master_dev_handle_t dev_handle;
+    uint8_t cmd = 0xFD; //High res read (around 8ms)
+    uint8_t outBuff[6];
+    uint16_t rawTemp;
+    uint16_t rawHum;
+
+    i2c_device_config_t dev_config = {
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+        .device_address = 0x44,
+        .scl_speed_hz = 100000,
+    };
+
+    i2c_master_bus_add_device(params->bus_handle, &dev_config, &dev_handle);
     
+    xSemaphoreTake(params->semaphore,100);
+    i2c_master_transmit(dev_handle, &cmd, 1, 100);
+    xSemaphoreGive(params->semaphore);
+    
+    vTaskDelay(pdMS_TO_TICKS(10));
+    
+    xSemaphoreTake(params->semaphore,100);
+    i2c_master_receive(dev_handle,outBuff,6,100);
+    xSemaphoreGive(params->semaphore);
+
+    rawTemp = outBuff[0]<<8 | outBuff[1];
+    rawHum = outBuff[3]<<8 | outBuff[4];
+    params->temperature = -45+175*rawTemp/65535.0f;
+    params->humidity = -6+125*rawHum/65535.0f;
+    if(outBuff[2] != sps30_calculate_crc(&outBuff[0]) || outBuff[5] != sps30_calculate_crc(&outBuff[3]))
+        xEventGroupSetBits(xEventGroupHandle, 1<<event_SHT40_error);
+    ESP_LOGI("SHT40","Temp:%.2f, Hum:%.2f",params->temperature, params->humidity);
+
+    xEventGroupSetBits(xEventGroupHandle, 1<<event_SHT40_read_ok);
+    vTaskDelete(NULL);
 }
 
 void read_sensors(sps30_task_param_t *sps30_task_param, ltr390_task_param_t *ltr390_task_param, bmp280_task_param_t *bmp280_task_param)
