@@ -1,14 +1,3 @@
-/**
- * @file main.c
- * @brief ESP WiFi Manager - Basic Example
- *
- * This example demonstrates basic usage of the WiFi Manager component:
- * - Initialize with default networks
- * - Enable HTTP REST API for configuration
- * - Enable captive portal for initial setup
- * - Subscribe to WiFi events
- */
-
 #include "wifiLogin.h"
 #include "MQTT.h"
 #include "sps30.h"
@@ -32,11 +21,13 @@
 
 //########################## defines ##########################
 
-#define FACTORY_RESET_PIN GPIO_NUM_12
-#define I2C_PORT        I2C_NUM_0
-#define SDA_GPIO        GPIO_NUM_23
-#define SCL_GPIO        GPIO_NUM_22
-#define I2C_FREQ_HZ     100000
+#define FACTORY_RESET_PIN           GPIO_NUM_12
+#define I2C_PORT                    I2C_NUM_0
+#define SDA_GPIO                    GPIO_NUM_23
+#define SCL_GPIO                    GPIO_NUM_22
+#define I2C_FREQ_HZ                 100000
+#define I2C_OPERATION_TIMEOUT       100
+#define I2C_MUTEX_TIMEOUT           100
 
 //########################## global variables ##########################
 
@@ -86,20 +77,41 @@ typedef struct {
 typedef struct {
     i2c_master_bus_handle_t bus_handle;
     SemaphoreHandle_t *semaphore;
-    float ambient_light; //lux
-    float uvi; //UV index
-    uint32_t sensor_counts_als; //ambient light count
-    uint32_t sensor_counts_uvs; //UV count
+    float temperature;
+    float humidity;
+} sht40_task_param_t;
+
+typedef struct {
+    i2c_master_bus_handle_t bus_handle;
+    SemaphoreHandle_t *semaphore;
+    float avg_pressure;
+    float avg_temperature;
     int holdup_time_ms;
     int samples;
 } bmp280_task_param_t;
 
 typedef struct {
-    i2c_master_bus_handle_t bus_handle;
-    SemaphoreHandle_t *semaphore;
-    float temperature;
-    float humidity;
-} sht40_task_param_t;
+    uint16_t    dig_T1;
+    int16_t     dig_T2;
+    int16_t     dig_T3;
+    uint16_t    dig_P1;
+    int16_t     dig_P2;
+    int16_t     dig_P3;
+    int16_t     dig_P4;
+    int16_t     dig_P5;
+    int16_t     dig_P6;
+    int16_t     dig_P7;
+    int16_t     dig_P8;
+    int16_t     dig_P9;
+} bmp280_NVS_t;
+
+ typedef struct {
+    bmp280_NVS_t bmp280_NVS;
+    int32_t adc_P;
+    int32_t adc_T;
+    uint32_t compensated_P;
+    int32_t compensated_T;
+} bmp280_data_t;
 
 //########################## functions definition ##########################
 
@@ -140,6 +152,67 @@ void reset_pin_check()
     }
 }
 
+/**
+ * @brief Compensate raw BMP280 ADC readings and calculate temperature and pressure.
+ *
+ * Performs temperature and pressure compensation on raw ADC values from the BMP280 sensor
+ * using factory calibration coefficients from the device's non-volatile storage (NVS).
+ * The algorithm is based on the official Bosch BMP280 datasheet compensation formulas.
+ *
+ * Temperature compensation must be performed first, as the calculated t_fine value is
+ * required for accurate pressure compensation.
+ *
+ * @param[in,out] bmp280_data Pointer to the BMP280 data structure containing:
+ *                - bmp280_NVS: Calibration coefficients (dig_T1-T3, dig_P1-P9)
+ *                - adc_T: Raw temperature ADC value (20-bit format)
+ *                - adc_P: Raw pressure ADC value (20-bit format)
+ *                Output fields filled:
+ *                - compensated_T: Temperature in 0.01°C resolution (e.g., 5123 = 51.23°C)
+ *                - compensated_P: Pressure in Pa, Q24.8 format (e.g., 24674867/256 = 963.862 hPa)
+ *
+ * @return ESP_OK if compensation succeeded.
+ * @return ESP_ERR_INVALID_ARG if pressure calibration coefficient validation fails
+ *         (division by zero protection; sensor likely not properly calibrated).
+ *
+ * @note The calibration coefficients (bmp280_data->bmp280_NVS) must be read from
+ *       the sensor before calling this function (register 0x88-0xA1, 24 bytes).
+ *
+ * @note Raw ADC values must be in the correct 20-bit format:
+ *       - adc_T = (MSB << 12) | (LSB << 4) | (XLSB >> 4)
+ *       - adc_P = (MSB << 12) | (LSB << 4) | (XLSB >> 4)
+ */
+esp_err_t bmp280_compensate(bmp280_data_t *bmp280_data)
+{
+    int32_t var1, var2, t_fine;
+
+    var1 = ((((bmp280_data->adc_T>>3) - ((int32_t)bmp280_data->bmp280_NVS.dig_T1<<1))) * ((int32_t)bmp280_data->bmp280_NVS.dig_T2)) >> 11;
+    var2 = (((((bmp280_data->adc_T>>4) - ((int32_t)bmp280_data->bmp280_NVS.dig_T1)) * ((bmp280_data->adc_T>>4) - ((int32_t)bmp280_data->bmp280_NVS.dig_T1)))>> 12) * ((int32_t)bmp280_data->bmp280_NVS.dig_T3)) >> 14;
+    t_fine = var1 + var2;
+    bmp280_data->compensated_T = (t_fine * 5 + 128) >> 8;
+
+    int64_t var1P, var2P, p;
+
+    var1P = ((int64_t)t_fine) - 128000;
+    var2P = var1P * var1P * (int64_t)bmp280_data->bmp280_NVS.dig_P6;
+    var2P = var2P + ((var1P*(int64_t)bmp280_data->bmp280_NVS.dig_P5)<<17);
+    var2P = var2P + (((int64_t)bmp280_data->bmp280_NVS.dig_P4)<<35);
+    var1P = ((var1P * var1P * (int64_t)bmp280_data->bmp280_NVS.dig_P3)>>8) + ((var1P * (int64_t)bmp280_data->bmp280_NVS.dig_P2)<<12);
+    var1P = (((((int64_t)1)<<47)+var1P))*((int64_t)bmp280_data->bmp280_NVS.dig_P1)>>33;
+    
+    if (var1P == 0){
+        bmp280_data->compensated_P = 0; // avoid exception caused by division by zero
+        return ESP_ERR_INVALID_ARG;
+    }
+    else{
+        p = 1048576-bmp280_data->adc_P;
+        p = (((p<<31)-var2P)*3125)/var1P;
+        var1P = (((int64_t)bmp280_data->bmp280_NVS.dig_P9) * (p>>13) * (p>>13)) >> 25;
+        var2P = (((int64_t)bmp280_data->bmp280_NVS.dig_P8) * p) >> 19;
+        bmp280_data->compensated_P = ((p + var1P + var2P) >> 8) + (((int64_t)bmp280_data->bmp280_NVS.dig_P7)<<4);
+        return ESP_OK;
+    }
+}
+
 uint8_t sps30_calculate_crc(uint8_t buffer[2])
 {
     uint8_t crc = 0xFF;
@@ -166,8 +239,9 @@ uint8_t sps30_calculate_crc(uint8_t buffer[2])
 void read_sps30_task(void *pvParameters) 
 {
     sps30_task_param_t *params = (sps30_task_param_t*)pvParameters;
-    i2c_master_dev_handle_t dev_handle_sps30;
+    i2c_master_dev_handle_t dev_handle;
     esp_err_t ret;
+    bool device_added = false;
     char sps30_SN[32];
     
     int holdup_time_ms = params->holdup_time_ms;
@@ -188,29 +262,27 @@ void read_sps30_task(void *pvParameters)
         .TypicalParticleSize = 0
     };
 
-    //SPS30 initialization and setup
-    while(true)
-    {
-        if(xSemaphoreTake(i2c_semaphore,pdMS_TO_TICKS(10000)) == pdTRUE)
-        {
-            ESP_LOGI("SPS30 reader task","lock acquired");
-            break;
-        }
-        else
-            ESP_LOGI("SPS30 reader task","lock not acquired");
-    }
 
     ESP_LOGI(TAG, "SPS30 init");
-    ret = sps30_init(params->bus_handle, &dev_handle_sps30, I2C_FREQ_HZ);
+    if(xSemaphoreTake(params->semaphore,pdMS_TO_TICKS(I2C_MUTEX_TIMEOUT)) != pdTRUE) goto cleanup;
+    ret = sps30_init(params->bus_handle, &dev_handle, I2C_FREQ_HZ);
 
-    if(ret == ESP_OK) ret = sps30_wake_up(dev_handle_sps30);
-    if(ret == ESP_OK) ret = sps30_wake_up(dev_handle_sps30);
+    //if(ret == ESP_OK) ret = sps30_wake_up(dev_handle);
+    // NO SUCCESS CHECK! The device is in sleep, the probing will wake up the interface, but it will fail.
+    i2c_master_probe(params->bus_handle,0x69,I2C_OPERATION_TIMEOUT);   
+    if(ret == ESP_OK) ret = sps30_wake_up(dev_handle);
+    xSemaphoreGive(params->semaphore);
+    if(ret != ESP_OK) goto cleanup;
+    device_added = true;
+
     vTaskDelay(pdMS_TO_TICKS(50));
-    if(ret == ESP_OK) ret = sps30_start_measurement_float(dev_handle_sps30 );
-    if(ret == ESP_OK) ret = sps30_read_serial_number(dev_handle_sps30,sps30_SN);
     
-    if(ret != ESP_OK) xEventGroupSetBits(xEventGroupHandle,1<<event_SPS30_error);
-    xSemaphoreGive(i2c_semaphore);
+    if(xSemaphoreTake(params->semaphore,pdMS_TO_TICKS(I2C_MUTEX_TIMEOUT)) != pdTRUE) goto cleanup;
+    if(ret == ESP_OK) ret = sps30_start_measurement_float(dev_handle );
+    if(ret == ESP_OK) ret = sps30_read_serial_number(dev_handle,sps30_SN);
+    xSemaphoreGive(params->semaphore);
+    if(ret != ESP_OK) goto cleanup;
+
     ESP_LOGI("SPS30 reader task", "SPS30 initialized, serial number: %s", sps30_SN);
 
     vTaskDelay(pdMS_TO_TICKS(warmup_time_ms));
@@ -218,10 +290,10 @@ void read_sps30_task(void *pvParameters)
     //Results sampling and averaging (with the right timing)
     for(int i = 0; i < samples; i++)
     {
-        xSemaphoreTake(i2c_semaphore,pdMS_TO_TICKS(10000));
-        if(sps30_read_measured_values_float(dev_handle_sps30, &sps30_temp_meas) != ESP_OK)
-            xEventGroupSetBits(xEventGroupHandle,1<<event_SPS30_error);
-        xSemaphoreGive(i2c_semaphore);
+    if(xSemaphoreTake(params->semaphore,pdMS_TO_TICKS(I2C_MUTEX_TIMEOUT)) != pdTRUE) goto cleanup;
+        ret = sps30_read_measured_values_float(dev_handle, &sps30_temp_meas);
+        xSemaphoreGive(params->semaphore);
+        if(ret != ESP_OK) goto cleanup;
     
         ESP_LOGI("SPS30 reader task", "SPS30 read values: PM10:%.3f PM2.5:%.3f", sps30_temp_meas.MC10p0, sps30_temp_meas.MC2p5);
 
@@ -241,12 +313,12 @@ void read_sps30_task(void *pvParameters)
             vTaskDelay(pdMS_TO_TICKS(holdup_time_ms));
     }
 
-    xSemaphoreTake(i2c_semaphore,pdMS_TO_TICKS(10000));
-    sps30_stop_measurement(dev_handle_sps30);
-    //sps30_sleep(dev_handle_sps30);    //<-- To FIX! It's not working properly. (The sensor does not wake up)
-    sps30_deinit(dev_handle_sps30);
-    xSemaphoreGive(i2c_semaphore);
-
+    if(xSemaphoreTake(params->semaphore,pdMS_TO_TICKS(I2C_MUTEX_TIMEOUT))) goto cleanup;
+    ret = sps30_stop_measurement(dev_handle);
+    //sps30_sleep(dev_handle);    //<-- To FIX! It's not working properly. (The sensor does not wake up)
+    if(ret == ESP_OK) sps30_deinit(dev_handle);
+    xSemaphoreGive(params->semaphore);
+    if(ret != ESP_OK) goto cleanup;
 
     params->sps30_measurement.MC1p0 = sps30_averaging_buff.MC1p0/samples;
     params->sps30_measurement.MC2p5 = sps30_averaging_buff.MC2p5/samples;
@@ -260,17 +332,25 @@ void read_sps30_task(void *pvParameters)
     params->sps30_measurement.TypicalParticleSize = sps30_averaging_buff.TypicalParticleSize/samples;                               
 
     //Signals that the data is ready, clean the cars then kill the thread
-    ESP_LOGI("SPS30 reader task","min free stack: %d bytes", uxTaskGetStackHighWaterMark(NULL));
     xEventGroupSetBits(xEventGroupHandle,1<<event_SPS30_read_ok);
-    ESP_LOGI("SPS30 reader task","Terminating task");
+    vTaskDelete(NULL);
+cleanup:
+    if (device_added) {
+        if (xSemaphoreTake(params->semaphore, portMAX_DELAY) == pdTRUE) {
+            i2c_master_bus_rm_device(dev_handle);
+            xSemaphoreGive(params->semaphore);
+        }
+    }
+    xEventGroupSetBits(xEventGroupHandle,1<<event_SPS30_error);
     vTaskDelete(NULL);
 }
 
 void read_ltr390_task(void *pvParameters)
 {
     ltr390_task_param_t *params = (ltr390_task_param_t*)pvParameters;
-    esp_err_t result;
     ltr390uv_handle_t dev_handle;
+    esp_err_t ret;
+    bool device_added = false;
 
     float ambient_light;
     float uvi;
@@ -299,22 +379,23 @@ void read_ltr390_task(void *pvParameters)
     ltr390uv_measure_register_t m_reg;
     ltr390uv_gain_register_t    g_reg;
     
-    if(xSemaphoreTake(params->semaphore,1000) == pdTRUE)
-    {
-        ltr390uv_init(params->bus_handle, &dev_cfg, &dev_handle);
-        
-        if (dev_handle == NULL) {
-            ESP_LOGI("LTR390 reader task", "ltr390uv handle init failed");
-            assert(dev_handle);
-        }
-
-        ltr390uv_get_measure_register(dev_handle, &m_reg);
-        ltr390uv_get_gain_register(dev_handle, &g_reg);
-        ltr390uv_get_interrupt_config_register(dev_handle, &ic_reg);
-        ltr390uv_get_control_register(dev_handle, &c_reg);
+    if(xSemaphoreTake(params->semaphore,pdMS_TO_TICKS(I2C_MUTEX_TIMEOUT)) != pdTRUE) goto cleanup;
+    
+    ret = ltr390uv_init(params->bus_handle, &dev_cfg, &dev_handle);
+    
+    if (dev_handle == NULL) {
+        ESP_LOGI("LTR390 reader task", "ltr390uv handle init failed");
         xSemaphoreGive(params->semaphore);
+        goto cleanup;
     }
-    else xEventGroupSetBits(xEventGroupHandle,1<<event_LTR390_error);
+    device_added = true;
+
+    if(ret == ESP_OK) ret = ltr390uv_get_measure_register(dev_handle, &m_reg);
+    if(ret == ESP_OK) ret = ltr390uv_get_gain_register(dev_handle, &g_reg);
+    if(ret == ESP_OK) ret = ltr390uv_get_interrupt_config_register(dev_handle, &ic_reg);
+    if(ret == ESP_OK) ret = ltr390uv_get_control_register(dev_handle, &c_reg);
+    xSemaphoreGive(params->semaphore);
+    if(ret != ESP_OK) goto cleanup;
 
     ESP_LOGI("LTR390 reader task", "Control Register (0x%02x): %s", c_reg.reg, uint8_to_binary(c_reg.reg));
     ESP_LOGI("LTR390 reader task", "Measure Register (0x%02x): %s", m_reg.reg, uint8_to_binary(m_reg.reg));
@@ -322,21 +403,16 @@ void read_ltr390_task(void *pvParameters)
     ESP_LOGI("LTR390 reader task", "IRQ Cfg Register (0x%02x): %s", ic_reg.reg, uint8_to_binary(ic_reg.reg));
     
     // averaging loop entry point
-    for (int i; i < params->samples; i++) {
+    for (int i = 0; i < params->samples; i++) {
 
-        if(xSemaphoreTake(params->semaphore,1000) == pdTRUE)
-        {
-            result = ltr390uv_get_ambient_light(dev_handle, &ambient_light);
-            if(result == ESP_OK) result = ltr390uv_get_als(dev_handle, &sensor_counts_als);
-            if(result == ESP_OK) result = ltr390uv_get_ultraviolet_index(dev_handle, &uvi);
-            if(result == ESP_OK) result = ltr390uv_get_uvs(dev_handle, &sensor_counts_uvs);
-            else{
-                ESP_LOGI("LTR390 reader task","ltr390uv device read failed (%s)", esp_err_to_name(result));
-                xEventGroupSetBits(xEventGroupHandle,1<<event_LTR390_error);
-            }
-            xSemaphoreGive(params->semaphore);
-        }
-        else xEventGroupSetBits(xEventGroupHandle,1<<event_LTR390_error);
+        if(xSemaphoreTake(params->semaphore,pdMS_TO_TICKS(I2C_MUTEX_TIMEOUT)) != pdTRUE) goto cleanup;
+        
+        ret = ltr390uv_get_ambient_light(dev_handle, &ambient_light);
+        if(ret == ESP_OK) ret = ltr390uv_get_als(dev_handle, &sensor_counts_als);
+        if(ret == ESP_OK) ret = ltr390uv_get_ultraviolet_index(dev_handle, &uvi);
+        if(ret == ESP_OK) ret = ltr390uv_get_uvs(dev_handle, &sensor_counts_uvs);
+        xSemaphoreGive(params->semaphore);
+        if(ret != ESP_OK) goto cleanup;
 
         ESP_LOGI("LTR390 reader task", "ambient light:     %.2f Lux, %lu counts", ambient_light,sensor_counts_als);
         ESP_LOGI("LTR390 reader task", "ultraviolet index: %f,%lu counts", uvi,sensor_counts_uvs);
@@ -355,6 +431,15 @@ void read_ltr390_task(void *pvParameters)
     
     ESP_LOGI("LTR390 reader task","min free stack: %d bytes", uxTaskGetStackHighWaterMark(NULL));
     ltr390uv_delete(dev_handle);
+    vTaskDelete(NULL);
+cleanup:
+    if (device_added) {
+        if (xSemaphoreTake(params->semaphore, portMAX_DELAY) == pdTRUE) {
+            i2c_master_bus_rm_device(dev_handle);
+            xSemaphoreGive(params->semaphore);
+        }
+    }
+    xEventGroupSetBits(xEventGroupHandle,1<<event_LTR390_error);
     vTaskDelete(NULL);
 }
 
@@ -375,6 +460,8 @@ void read_sht40_task(void *pvParameters)
     uint8_t outBuff[6];
     uint16_t rawTemp;
     uint16_t rawHum;
+    esp_err_t ret;
+    bool device_added = false;
 
     i2c_device_config_t dev_config = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
@@ -382,17 +469,19 @@ void read_sht40_task(void *pvParameters)
         .scl_speed_hz = 100000,
     };
 
-    i2c_master_bus_add_device(params->bus_handle, &dev_config, &dev_handle);
-    
-    xSemaphoreTake(params->semaphore,100);
-    i2c_master_transmit(dev_handle, &cmd, 1, 100);
+    if(xSemaphoreTake(params->semaphore,pdMS_TO_TICKS(I2C_MUTEX_TIMEOUT)) != pdTRUE) goto cleanup;
+    ret = i2c_master_bus_add_device(params->bus_handle, &dev_config, &dev_handle);    
+    if(ret != ESP_OK) ret = i2c_master_transmit(dev_handle, &cmd, 1, I2C_OPERATION_TIMEOUT);
     xSemaphoreGive(params->semaphore);
-    
+    if(ret != ESP_OK) goto cleanup;
+    device_added = true;
+
     vTaskDelay(pdMS_TO_TICKS(10));
     
-    xSemaphoreTake(params->semaphore,100);
-    i2c_master_receive(dev_handle,outBuff,6,100);
+    if(xSemaphoreTake(params->semaphore,pdMS_TO_TICKS(I2C_MUTEX_TIMEOUT)) != pdTRUE) goto cleanup;
+    ret = i2c_master_receive(dev_handle,outBuff,6,I2C_OPERATION_TIMEOUT);
     xSemaphoreGive(params->semaphore);
+    if(ret != ESP_OK) goto cleanup;
 
     rawTemp = outBuff[0]<<8 | outBuff[1];
     rawHum = outBuff[3]<<8 | outBuff[4];
@@ -403,6 +492,153 @@ void read_sht40_task(void *pvParameters)
     ESP_LOGI("SHT40","Temp:%.2f, Hum:%.2f",params->temperature, params->humidity);
 
     xEventGroupSetBits(xEventGroupHandle, 1<<event_SHT40_read_ok);
+    vTaskDelete(NULL);
+
+cleanup:
+    if (device_added) {
+        if (xSemaphoreTake(params->semaphore, portMAX_DELAY) == pdTRUE) {
+            i2c_master_bus_rm_device(dev_handle);
+            xSemaphoreGive(params->semaphore);
+        }
+    }
+    xEventGroupSetBits(xEventGroupHandle,1<<event_SHT40_error);
+    vTaskDelete(NULL);
+}
+
+void read_bmp280_task(void *pvParams)
+{
+    bmp280_task_param_t *params = (bmp280_task_param_t*) pvParams;
+    i2c_master_dev_handle_t dev_handle;
+    uint8_t cmd[2];
+    uint8_t buff[24];
+    bmp280_data_t bmp280_data;
+    uint32_t compensated_P_ACCUMULATOR = 0;
+    int32_t compensated_T_ACCUMULATOR = 0;
+    bool device_added = false;
+    esp_err_t ret;
+
+    i2c_device_config_t dev_config = {
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+        .device_address = 0x77,
+        .scl_speed_hz = 100000,
+    };
+
+    //Send a soft reset command to the device
+    cmd[0] = 0xE0;  //reset register
+    cmd[1] = 0xB6;  //reset cmd    
+
+    if(xSemaphoreTake(params->semaphore,pdMS_TO_TICKS(I2C_MUTEX_TIMEOUT)) != pdTRUE) goto cleanup;
+    ret = i2c_master_bus_add_device(params->bus_handle , &dev_config, &dev_handle);
+    if(ret == ESP_OK) ret = i2c_master_transmit(dev_handle,cmd,2,I2C_OPERATION_TIMEOUT);
+    xSemaphoreGive(params->semaphore);
+    if(ret != ESP_OK) goto cleanup;
+    device_added = true;
+    
+    // Wait for the NVS data to be ready, then loads it in memory.
+    vTaskDelay(pdMS_TO_TICKS(10));
+
+    cmd[0] = 0xF3;
+
+    do{
+        vTaskDelay(pdMS_TO_TICKS(10));
+        if(xSemaphoreTake(params->semaphore,pdMS_TO_TICKS(I2C_MUTEX_TIMEOUT)) != pdTRUE) goto cleanup;
+        ret = i2c_master_transmit_receive(dev_handle,cmd,1,buff,1,I2C_OPERATION_TIMEOUT);
+        xSemaphoreGive(params->semaphore);
+        if(ret != ESP_OK) goto cleanup;
+    }
+    while((buff[0] & 0b00000001) != 0);
+
+    //Read NVS data
+    cmd[0]=0x88;
+    if(xSemaphoreTake(params->semaphore,pdMS_TO_TICKS(I2C_MUTEX_TIMEOUT)) != pdTRUE) goto cleanup;
+    ret = i2c_master_transmit_receive(dev_handle,cmd,1,buff,24,I2C_OPERATION_TIMEOUT);
+
+    //  Device setup and sampling start
+
+    // Bit organization: MSB 7 6 5 4 3 2 1 0 LSB
+    // T_stby = 1000ms = 0b101 (bits 5 to 7)
+    // IIR = 16 = 0b111 (bits 2 to 4)
+    // 3-wire SPI disabled = 0b0 (bit 0)
+    cmd[0] = 0xF5;
+    cmd[1] = 0b10111100;
+    if(ret == ESP_OK) ret = i2c_master_transmit(dev_handle,&cmd[0],2,I2C_OPERATION_TIMEOUT);
+
+    //osrs_t = 2 = 0b010 (bits 5 to 7)
+    //osrs_p = 16 = 0b111 (bits 2 to 4)
+    //Normal Mode (continuos measurement) = 0b11 (bits 0 to 1)
+    
+    cmd[0] = 0xF4;
+    cmd[1] = 0b01011111;
+    if(ret == ESP_OK) ret = i2c_master_transmit(dev_handle,&cmd[0],2,I2C_OPERATION_TIMEOUT);
+    xSemaphoreGive(params->semaphore);
+    if(ret != ESP_OK) goto cleanup;
+
+    bmp280_data.bmp280_NVS.dig_T1 = (uint16_t)((buff[1] << 8) | buff[0]);
+    bmp280_data.bmp280_NVS.dig_T2 = (int16_t)((buff[3] << 8)  | buff[2]);
+    bmp280_data.bmp280_NVS.dig_T3 = (int16_t)((buff[5] << 8)  | buff[4]);
+    bmp280_data.bmp280_NVS.dig_P1 = (uint16_t)((buff[7] << 8) | buff[6]);
+    bmp280_data.bmp280_NVS.dig_P2 = (int16_t)((buff[9] << 8)  | buff[8]);
+    bmp280_data.bmp280_NVS.dig_P3 = (int16_t)((buff[11] << 8) | buff[10]);
+    bmp280_data.bmp280_NVS.dig_P4 = (int16_t)((buff[13] << 8) | buff[12]);
+    bmp280_data.bmp280_NVS.dig_P5 = (int16_t)((buff[15] << 8) | buff[14]);
+    bmp280_data.bmp280_NVS.dig_P6 = (int16_t)((buff[17] << 8) | buff[16]);
+    bmp280_data.bmp280_NVS.dig_P7 = (int16_t)((buff[19] << 8) | buff[18]);
+    bmp280_data.bmp280_NVS.dig_P8 = (int16_t)((buff[21] << 8) | buff[20]);
+    bmp280_data.bmp280_NVS.dig_P9 = (int16_t)((buff[23] << 8) | buff[22]);
+
+    //check if the sensor is still completing the first reading
+    vTaskDelay(pdMS_TO_TICKS(10));
+    cmd[0] = 0xF3;
+    do{
+        if(xSemaphoreTake(params->semaphore,pdMS_TO_TICKS(I2C_MUTEX_TIMEOUT)) != pdTRUE) goto cleanup;
+        ret = i2c_master_transmit_receive(dev_handle,cmd,1,buff,1,I2C_OPERATION_TIMEOUT);
+        xSemaphoreGive(params->semaphore);
+        if(ret != ESP_OK) goto cleanup;
+
+    }while((buff[0] & 0b00001000) != 0);
+
+    for(int i=0; i < params->samples; i++){
+        //Read data 
+        cmd[0] = 0xF7;
+        if(xSemaphoreTake(params->semaphore,pdMS_TO_TICKS(I2C_MUTEX_TIMEOUT)) != pdTRUE) goto cleanup;
+        ret = i2c_master_transmit_receive(dev_handle,cmd,1,buff,6,I2C_OPERATION_TIMEOUT);
+        xSemaphoreGive(params->semaphore);
+        if(ret != ESP_OK) goto cleanup;
+
+        bmp280_data.adc_P = ((int32_t)buff[0] << 12) | ((int32_t)buff[1] << 4) | ((int32_t)buff[2] >> 4);
+        bmp280_data.adc_T = ((int32_t)buff[3] << 12) | ((int32_t)buff[4] << 4) | ((int32_t)buff[5] >> 4);
+        
+        if(bmp280_compensate(&bmp280_data) != ESP_OK) goto cleanup;
+        
+        compensated_P_ACCUMULATOR += bmp280_data.compensated_P;
+        compensated_T_ACCUMULATOR += bmp280_data.compensated_T;
+ 
+        // Slightly more than what a reading takes (1000ms of stby between radings + 40ms for the actual reading + 10ms to spare)
+        vTaskDelay(pdMS_TO_TICKS(1050));
+    }
+
+    params->avg_pressure = (float)compensated_P_ACCUMULATOR/params->samples;
+    params->avg_temperature = (float)compensated_T_ACCUMULATOR/params->samples;
+
+    cmd[0] = 0xF4;
+    cmd[1] = 0b01011100; //Put the sensor in sleep (0.1 uA current consumption)
+
+    if(xSemaphoreTake(params->semaphore,pdMS_TO_TICKS(I2C_MUTEX_TIMEOUT)) != pdTRUE) goto cleanup;
+    i2c_master_transmit(dev_handle,&cmd[0],2,I2C_OPERATION_TIMEOUT);
+    i2c_master_bus_rm_device(dev_handle);
+    xSemaphoreGive(params->semaphore);
+    
+    xEventGroupSetBits(xEventGroupHandle,1<<event_BMP280_read_ok);
+    vTaskDelete(NULL);    
+
+cleanup:
+    if (device_added) {
+        if (xSemaphoreTake(params->semaphore, portMAX_DELAY) == pdTRUE) {
+            i2c_master_bus_rm_device(dev_handle);
+            xSemaphoreGive(params->semaphore);
+        }
+    }
+    xEventGroupSetBits(xEventGroupHandle,1<<event_BMP280_error);
     vTaskDelete(NULL);
 }
 
@@ -425,6 +661,8 @@ void read_sensors(sps30_task_param_t *sps30_task_param, ltr390_task_param_t *ltr
     //sps30_task_param_t *sps30_task_param = malloc(sizeof(sps30_task_param_t));
     //ltr390_task_param_t *ltr390_task_param = malloc(sizeof(ltr390_task_param_t));
     
+    // ##################### ADD I2C DEVICE PROBING AND LOGIC MANAGING MISSING DEVICES ######################
+
     //sps30_task_param->sps30_measurement <-- the data gets returned trough this
     sps30_task_param->bus_handle = bus_handle;
     sps30_task_param->semaphore = &i2c_semaphore;
@@ -457,6 +695,7 @@ void read_sensors(sps30_task_param_t *sps30_task_param, ltr390_task_param_t *ltr
     i2c_del_master_bus(bus_handle);
 
     xEventGroupSetBits(xEventGroupHandle,1<<event_sensor_read_ok);
+    
 }
 
 
