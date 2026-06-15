@@ -2,14 +2,15 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "type": "gdbtarget",
-      "request": "attach",
-      "name": "Eclipse CDT GDB Adapter"
-    },
-    {
       "type": "espidf",
-      "name": "Launch",
-      "request": "launch"
+      "name": "ESP32 JTAG Debug (FT2232)",
+      "request": "launch",
+      "idfTarget": "esp32",
+      "openOcdConfigs": [
+        "interface/ftdi/esp_ftdi.cfg",
+        "target/esp32.cfg"
+      ],
+      "gdbinitFilePath": "${workspaceFolder}/gdbinit"
     }
   ]
 }

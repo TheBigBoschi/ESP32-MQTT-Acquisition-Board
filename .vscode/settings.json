@@ -3,8 +3,7 @@
   "idf.espIdfPath": "/home/boschi/.espressif/v5.5.2/esp-idf",
   "idf.pythonInstallPath": "/usr/bin/python3",
   "idf.openOcdConfigs": [
-    "interface/ftdi/esp_ftdi.cfg",
-    "target/esp32.cfg"
+    "board/esp32-wrover-kit-3.3v.cfg"
   ],
   "idf.port": "/dev/ttyUSB0",
   "idf.toolsPath": "/home/boschi/.espressif",
@@ -18,5 +17,17 @@
     "--compile-commands-dir=/home/boschi/Desktop/Mega/ESP32 - Enviromental Data Acquisition Board/ESP32 MQTT Acquisition Board/build"
   ],
   "idf.flashType": "UART",
-  "idf.currentSetup": "/home/boschi/.espressif/v5.5.2/esp-idf"
+"cmake.configureEnvironment": {
+        "IDF_PATH": "/home/boschi/.espressif/v5.5.2/esp-idf",
+        "PATH": "/home/boschi/.espressif/tools/xtensa-esp-elf/esp-14.2.0_20251107/xtensa-esp-elf/bin:${env:PATH}"
+    },
+    "cmake.environment": {
+        "IDF_PATH": "/home/boschi/.espressif/v5.5.2/esp-idf",
+        "PATH": "/home/boschi/.espressif/tools/xtensa-esp-elf/esp-14.2.0_20251107/xtensa-esp-elf/bin:${env:PATH}"
+    },
+    "cmake.configureSettings": {
+        "CMAKE_TOOLCHAIN_FILE": "/home/boschi/.espressif/v5.5.2/esp-idf/tools/cmake/toolchain-esp32.cmake",
+        "PYTHON": "/home/boschi/.espressif/python_env/idf5.5_py3.14_env/bin/python"
+    },
+    "idf.currentSetup": "/home/boschi/.espressif/v5.5.2/esp-idf"
 }
