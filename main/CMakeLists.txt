@@ -4,7 +4,11 @@ idf_component_register(
         "wifiLogin.c"
         "main.c"
         "wifiFastConnect.c"
-        "sps30.c"
+        "sensors_interfaces/syncronization.c"
+        "sensors_interfaces/sps30.c"
+        "sensors_interfaces/ltr390.c"
+        "sensors_interfaces/sht40.c"
+        "sensors_interfaces/bmp280.c"
     INCLUDE_DIRS 
         "."
         "include"

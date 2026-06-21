@@ -7,6 +7,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <driver/i2c_master.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+
 
 
 typedef struct {
@@ -34,6 +37,17 @@ typedef struct {
     uint16_t NC10p0;
     uint16_t TypicalParticleSize;
 } sps30_measurement_uint16_t;
+
+typedef struct {
+    i2c_master_bus_handle_t bus_handle;
+    SemaphoreHandle_t *semaphore;
+    EventGroupHandle_t *event_group;
+    int sensor_id;
+    sps30_measurement_float_t sps30_measurement;
+    int warmup_time_ms;
+    int holdup_time_ms;
+    int samples;
+} sps30_task_param_t;
 
 /**
  * @brief Starts measurement in float mode.
@@ -204,5 +218,18 @@ esp_err_t sps30_init(
  * @return esp_err_t ESP_OK on success, otherwise error code.
  */
 esp_err_t sps30_deinit(i2c_master_dev_handle_t dev_handle);
+
+/**
+ * @brief FreeRTOS task to read measurements from an SPS30 sensor.
+ *
+ * This task initializes the SPS30 sensor on the I2C bus, reads particulate matter
+ * concentrations and particle counts, performs averaging, and stores the results in
+ * the provided `sps30_task_param_t` structure. It signals completion or error via
+ * a FreeRTOS event group.
+ *
+ * @param pvParameters A pointer to a `sps30_task_param_t` structure containing I2C bus
+ *                     handle, semaphore, warmup time, hold-up time, and output variables.
+ */
+void read_sps30_task(void *pvParameters);
 
 #endif /* SPS30_H_ */

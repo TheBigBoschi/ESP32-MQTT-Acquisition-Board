@@ -4,8 +4,10 @@
 
 #include <stdint.h>
 #include "sps30.h"
+#include "syncronization.h"
 #include <driver/i2c_master.h>
 #include <string.h>
+#include <freertos/FreeRTOS.h>
 
 
 #define CMD_START_MEASUREMENT       0x0010
@@ -22,6 +24,8 @@
 #define CMD_R_DEVICE_STAT_REG       0xD206
 #define CMD_CLR_DEVICE_STAT_REG     0xD210
 #define CMD_RESET                   0xD304
+
+
 
 /**
  * @brief Calculates the CRC for a 2-byte buffer using the Sensirion algorithm.
@@ -610,4 +614,120 @@ esp_err_t sps30_init(
 esp_err_t sps30_deinit(i2c_master_dev_handle_t dev_handle)
 {
     return i2c_master_bus_rm_device(dev_handle);
+}
+
+/**
+ * @brief Initialized and reads an SPS30. Puts the device in sleep and 
+ * deinitialize it before returning. Intended to be called as a thread function.
+ * 
+ * @param 
+ * @return
+ */
+void read_sps30_task(void *pvParameters) 
+{
+    sps30_task_param_t *params = (sps30_task_param_t*)pvParameters;
+    i2c_master_dev_handle_t dev_handle;
+    esp_err_t ret;
+    bool device_added = false;
+    char sps30_SN[32];
+    
+    int holdup_time_ms = params->holdup_time_ms;
+    int samples = params->samples;
+    int warmup_time_ms = params->warmup_time_ms;
+
+    sps30_measurement_float_t sps30_temp_meas;
+    sps30_measurement_float_t sps30_averaging_buff = {
+        .MC1p0 = 0,
+        .MC2p5 = 0,
+        .MC4p0 = 0,
+        .MC10p0 = 0,
+        .NC0p5 = 0,
+        .NC1p0 = 0,
+        .NC2p5 = 0,
+        .NC4p0 = 0,
+        .NC10p0 = 0,
+        .TypicalParticleSize = 0
+    };
+
+    if(xSemaphoreTake(*params->semaphore,pdMS_TO_TICKS(I2C_MUTEX_TIMEOUT)) != pdTRUE) goto cleanup;
+    ret = sps30_init(params->bus_handle, &dev_handle, I2C_FREQ_HZ);
+    // NO SUCCESS CHECK! The device is in sleep, the probing will wake up the interface, but it will fail.
+    i2c_master_probe(params->bus_handle,0x69,10);
+    if(ret == ESP_OK) ret = sps30_wake_up(dev_handle);
+    xSemaphoreGive(*params->semaphore);
+
+    if(ret != ESP_OK) goto cleanup;
+    device_added = true;
+    
+    vTaskDelay(pdMS_TO_TICKS(50));
+
+    if(xSemaphoreTake(*params->semaphore,pdMS_TO_TICKS(I2C_MUTEX_TIMEOUT)) != pdTRUE) goto cleanup;
+    if(ret == ESP_OK) ret = sps30_read_serial_number(dev_handle,sps30_SN);
+    if(ret == ESP_OK) ret = sps30_start_measurement_float(dev_handle );
+    xSemaphoreGive(*params->semaphore);
+    if(ret != ESP_OK) goto cleanup;
+    vTaskDelay(pdMS_TO_TICKS(20 + warmup_time_ms)); //20ms minimium to execute the start readings command
+
+    //Results sampling and averaging (with the right timing)
+    for(int i = 0; i < samples; i++)
+    {
+    if(xSemaphoreTake(*params->semaphore,pdMS_TO_TICKS(I2C_MUTEX_TIMEOUT)) != pdTRUE) goto cleanup;
+        ret = sps30_read_measured_values_float(dev_handle, &sps30_temp_meas);
+        xSemaphoreGive(*params->semaphore);
+        if(ret != ESP_OK) goto cleanup;
+    
+        sps30_averaging_buff.MC1p0 += sps30_temp_meas.MC1p0;
+        sps30_averaging_buff.MC2p5 += sps30_temp_meas.MC2p5;
+        sps30_averaging_buff.MC4p0 += sps30_temp_meas.MC4p0;
+        sps30_averaging_buff.MC10p0 += sps30_temp_meas.MC10p0;
+        sps30_averaging_buff.NC0p5 += sps30_temp_meas.NC0p5;
+        sps30_averaging_buff.NC1p0 += sps30_temp_meas.NC1p0;
+        sps30_averaging_buff.NC2p5 += sps30_temp_meas.NC2p5;
+        sps30_averaging_buff.NC4p0 += sps30_temp_meas.NC4p0;
+        sps30_averaging_buff.NC10p0 += sps30_temp_meas.NC10p0;
+        sps30_averaging_buff.TypicalParticleSize += sps30_temp_meas.TypicalParticleSize;
+        
+        //I dont need to wait the holdup time before repeating the cycle if it's the last reading. 
+        if(i != samples-1)
+        {
+            vTaskDelay(pdMS_TO_TICKS(holdup_time_ms));
+            //ESP_LOGI("SPS30","samples counter: %d + asddd",i);
+            }
+        }
+
+    if(xSemaphoreTake(*params->semaphore,pdMS_TO_TICKS(I2C_MUTEX_TIMEOUT)) != pdTRUE) goto cleanup;
+    ret = sps30_stop_measurement(dev_handle);
+    vTaskDelay(pdMS_TO_TICKS(20));
+    if(ret == ESP_OK) ret = sps30_sleep(dev_handle);
+    if(ret == ESP_OK) ret = sps30_deinit(dev_handle);
+
+    xSemaphoreGive(*params->semaphore);
+    if(ret != ESP_OK) goto cleanup;
+    //ESP_LOGI("SPS30","SN: %s",sps30_SN);
+
+    params->sps30_measurement.MC1p0 = sps30_averaging_buff.MC1p0/samples;
+    params->sps30_measurement.MC2p5 = sps30_averaging_buff.MC2p5/samples;
+    params->sps30_measurement.MC4p0 = sps30_averaging_buff.MC4p0/samples;
+    params->sps30_measurement.MC10p0 = sps30_averaging_buff.MC10p0/samples;
+    params->sps30_measurement.NC0p5 = sps30_averaging_buff.NC0p5/samples;
+    params->sps30_measurement.NC1p0 = sps30_averaging_buff.NC1p0/samples;
+    params->sps30_measurement.NC2p5 = sps30_averaging_buff.NC2p5/samples;
+    params->sps30_measurement.NC4p0 = sps30_averaging_buff.NC4p0/samples;
+    params->sps30_measurement.NC10p0 = sps30_averaging_buff.NC10p0/samples;
+    params->sps30_measurement.TypicalParticleSize = sps30_averaging_buff.TypicalParticleSize/samples;                               
+        
+    //Signals that the data is ready, then kill the thread
+    xEventGroupSetBits(*params->event_group, 1<<(params->sensor_id*2));
+    vTaskDelete(NULL);
+    
+cleanup:
+
+    if (device_added == true) {
+        if (xSemaphoreTake(*params->semaphore, portMAX_DELAY) == pdTRUE) {
+            sps30_deinit(dev_handle);
+            xSemaphoreGive(*params->semaphore);
+        }
+    }
+    xEventGroupSetBits(*params->event_group, 1<<(params->sensor_id*2+1));
+    vTaskDelete(NULL);
 }

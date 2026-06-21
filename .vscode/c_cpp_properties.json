@@ -9,14 +9,12 @@
       "intelliSenseMode": "gcc-arm",
       "includePath": [
         "${config:idf.espIdfPath}/components/**",
-        "${config:idf.espIdfPathWin}/components/**",
         "${workspaceFolder}/**",
         "${workspaceFolder}/managed_components/tuanpmt__esp_wifi_manager/include"
       ],
       "browse": {
         "path": [
           "${config:idf.espIdfPath}/components",
-          "${config:idf.espIdfPathWin}/components",
           "${workspaceFolder}"
         ],
         "limitSymbolsToIncludedHeaders": true
