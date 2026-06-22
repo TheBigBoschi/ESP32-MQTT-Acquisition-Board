@@ -16,14 +16,14 @@
 //########################## Sensor Readings Configuration ##########################
 
 //All times expressed in ms
-#define SPS30_WARMUP_TIME           10000   // at 10S sps30 works, at 20 no. no idea why.
+#define SPS30_WARMUP_TIME           10000   //at least 20S in production
 #define SPS30_HOLDUP_TIME           1000
 #define SPS30_AVERAGING_SAMPLES     3
 #define LTR390_HOLDUP_TIME          500
 #define LTR390_AVERAGING_SAMPLES    3
 #define BMP280_AVERAGING_SAMPLES    3
 
-#define EVENTGROUP_WAIT_TIMEOUT_LONG    20000
+#define EVENTGROUP_WAIT_TIMEOUT_LONG    30000
 #define EVENTGROUP_WAIT_TIMEOUT_SHORT   5000
 
 //########################## EventGroup bits definition ##########################
@@ -65,7 +65,7 @@ void sensors_value_print(sps30_task_param_t* sps30_task_param, ltr390_task_param
     ESP_LOGI("sensors_value_print","            Pressure: %.2f Pa, Temp: %.2f °C",(float)bmp280_task_param->avg_pressure/256,(((float)bmp280_task_param->avg_temperature)/100));
 }
 
-void read_sensors(sps30_task_param_t *sps30_task_param, ltr390_task_param_t *ltr390_task_param, sht40_task_param_t *sht40_task_param, bmp280_task_param_t *bmp280_task_param)
+void read_sensors(sps30_task_param_t *sps30_task_param, ltr390_task_param_t *ltr390_task_param, sht40_task_param_t *sht40_task_param, bmp280_task_param_t *bmp280_task_param, EventBits_t* error_mask)
 {
     i2c_master_bus_handle_t bus_handle;
     SemaphoreHandle_t i2c_semaphore = xSemaphoreCreateMutex();
@@ -123,7 +123,6 @@ void read_sensors(sps30_task_param_t *sps30_task_param, ltr390_task_param_t *ltr
     
     ESP_LOGI("SENSOR SYNC", "Waiting for bits group");
     
-    //FIX THE WAITING!
     event_bits = xEventGroupWaitBits(
         event_group,
         1<<event_SHT40_read_ok |
@@ -139,7 +138,6 @@ void read_sensors(sps30_task_param_t *sps30_task_param, ltr390_task_param_t *ltr
     //I wait for all the other i2c-using task to finish and then I read the LTR390, avoiding any mixup of i2c drivers.
     xTaskCreate(read_ltr390_task,"LTR390 reader task",4096,(void*)ltr390_task_param,1,NULL);
     
-    //FIX THE WAITING!
     event_bits = xEventGroupWaitBits(event_group, 1<<event_LTR390_read_ok,pdFALSE,pdTRUE,pdMS_TO_TICKS(EVENTGROUP_WAIT_TIMEOUT_SHORT));
 
     static const struct {
@@ -180,6 +178,6 @@ void read_sensors(sps30_task_param_t *sps30_task_param, ltr390_task_param_t *ltr
 
     sensors_value_print(sps30_task_param, ltr390_task_param, sht40_task_param, bmp280_task_param);
 
-    vTaskDelay(pdMS_TO_TICKS(10));
-    
+    vTaskDelay(pdMS_TO_TICKS(2000));
+    *error_mask = event_bits;
 }

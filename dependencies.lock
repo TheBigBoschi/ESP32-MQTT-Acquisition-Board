@@ -1,6 +1,36 @@
 dependencies:
+  espressif/jsmn:
+    component_hash: d80350c41bbaa827c98a25b6072df00884e72f54885996fab4a4f0aebce6b6c3
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.3'
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    version: 1.1.0
+  espressif/json_generator:
+    component_hash: 6538d6acb33976977224343105498c06bcee459f932450a827176f992cdd24e8
+    dependencies: []
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.2.0
+  espressif/json_parser:
+    component_hash: d74b81729ad06ec11ff5eb5b1b0d7df1d00e6027fc11471f4b139c70dcf1b1e4
+    dependencies:
+    - name: espressif/jsmn
+      registry_url: https://components.espressif.com
+      require: private
+      rules:
+      - if: idf_version >=5.0
+      version: ~1.1
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.0.3
   espressif/mdns:
-    component_hash: 1ebe3bd675bb9d1c58f52bc0b609b32f74e572b01c328f9e61282040c775495c
+    component_hash: 291732b5df4d181eb75eba9042799a508c4c124503a0c0573132a0a48d2e3fbe
     dependencies:
     - name: idf
       require: private
@@ -8,7 +38,7 @@ dependencies:
     source:
       registry_url: https://components.espressif.com
       type: service
-    version: 1.11.0
+    version: 1.11.2
   espressif/mqtt:
     component_hash: ffdad5659706b4dc14bc63f8eb73ef765efa015bf7e9adf71c813d52a2dc9342
     dependencies:
@@ -91,10 +121,12 @@ dependencies:
     - esp32h2
     version: 1.1.0
 direct_dependencies:
+- espressif/json_generator
+- espressif/json_parser
 - espressif/mqtt
 - idf
 - k0i05/esp_ltr390uv
 - tuanpmt/esp_wifi_manager
-manifest_hash: 89946cca62a72ac5cb54fca5203e55ee6ac2a4e0241015adce110afcf09401e0
+manifest_hash: 31d9a1d987c2639f85b960a87c63fb4294a27c7c1d2f18f97cd6ed3d30664624
 target: esp32
 version: 2.0.0

@@ -1,9 +1,11 @@
 #include "wifiLogin.h"
 #include "MQTT.h"
 #include "syncronization.h"
+#include "Static_data.h"
 
 #include <stdio.h>
 #include <string.h>
+#include <esp_sleep.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/gpio.h"
@@ -76,12 +78,11 @@ void reset_pin_check()
     }
 }
 
-
 void app_main(void)
 {
     xEventGroupHandle = xEventGroupCreate();
-    i2c_semaphore = xSemaphoreCreateMutex();    
-    
+    i2c_semaphore = xSemaphoreCreateMutex();
+        
     sps30_task_param_t sps30_meas;
     ltr390_task_param_t ltr390_meas;
     sht40_task_param_t sht40_meas;
@@ -96,14 +97,7 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
     
-
-
-    while(1)
-    {
-        read_sensors(&sps30_meas, &ltr390_meas, &sht40_meas, &bmp280_meas);
-        //sensors_value_print(&sps30_meas, &ltr390_meas, &sht40_meas, &bmp280_meas);
-        //xEventGroupWaitBits(xEventGroupHandle,1<<event_sensor_read_ok,pdTRUE,pdTRUE,pdMS_TO_TICKS(EVENTGROUP_WAIT_TIMEOUT));
-    }
+/*
     // Minimal network stack init (required by WiFi)
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
@@ -186,5 +180,14 @@ void app_main(void)
         vTaskDelay(pdMS_TO_TICKS(1000));
 
         MQTT_Deinit();
+    }
+    */
+            while(1)
+    {
+        EventBits_t error_mask;
+        read_sensors(&sps30_meas, &ltr390_meas, &sht40_meas, &bmp280_meas, &error_mask);
+        store_data(&sps30_meas, &ltr390_meas, &sht40_meas, &bmp280_meas, error_mask,0);
+        
+        
     }
 }
