@@ -117,9 +117,9 @@ void read_sensors(sps30_task_param_t *sps30_task_param, ltr390_task_param_t *ltr
     bmp280_task_param->event_group = &event_group;
 
     ESP_LOGI("SENSOR SYNC", "Creating Tasks");
-    xTaskCreate(read_sps30_task,"SPS30 reader task",4096,(void*)sps30_task_param,1,NULL);
-    xTaskCreate(read_sht40_task,"SHT40 reader task",4096,(void*)sht40_task_param,1,NULL);
-    xTaskCreate(read_bmp280_task,"BMP280 reader task",4096,(void*)bmp280_task_param,1,NULL);
+    xTaskCreate(read_sps30_task,"SPS30 reader task",4096,(void*)sps30_task_param,3,NULL);
+    xTaskCreate(read_sht40_task,"SHT40 reader task",4096,(void*)sht40_task_param,3,NULL);
+    xTaskCreate(read_bmp280_task,"BMP280 reader task",4096,(void*)bmp280_task_param,3,NULL);
     
     ESP_LOGI("SENSOR SYNC", "Waiting for bits group");
     

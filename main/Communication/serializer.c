@@ -23,7 +23,7 @@
  *       - To retrieve original value: stored_value / 100.0
  *       - Example: stored value 2350 = 23.50 (original units)
  */
-uint8_t generate_data_json(char* output_str, int output_str_size, rtc_data* data, uint8_t members)
+uint8_t json_generate_data(char* output_str, int output_str_size, rtc_data_t* data, uint8_t members)
 {
     json_gen_str_t jstr;
     uint8_t i;
@@ -100,7 +100,9 @@ uint8_t generate_data_json(char* output_str, int output_str_size, rtc_data* data
  * @param[in] Vbatt Battery voltage in volts
  * @param[in] rssi Received Signal Strength Indicator in dBm
  * @param[in] payload_group Payload group sequence number
+ * @param[in] sampling_time Seconds between samples
  * @param[in] next_wakeup Seconds until next device wake-up
+ * @param[in] next_transmission Seconds until the next transmission
  * 
  * @return 0 on success, non-zero error code if JSON generation fails
  * 
@@ -108,15 +110,18 @@ uint8_t generate_data_json(char* output_str, int output_str_size, rtc_data* data
  *       "rssi" (int), "payload_group" (int64), and "next_wakeup" (int64).
  *       Generation stops on first error; remaining fields are not added.
  */
-int generate_telemetry_json(
+int json_generate_telemetry(
     char* output_str,
     int output_str_size,
     time_t time,
     char* ID,
     float Vbatt,
     int rssi,
+    time_t boot_time,
     int32_t payload_group,
-    int16_t next_wakeup)
+    int16_t sampling_time,
+    int16_t next_wakeup,
+    int16_t next_transmission)
 {
     json_gen_str_t jstr;
     int ret;
@@ -128,10 +133,18 @@ int generate_telemetry_json(
     if(ret == 0) ret = json_gen_obj_set_string(&jstr, "ID", ID);
     if(ret == 0) ret = json_gen_obj_set_float(&jstr, "Vbatt", Vbatt);
     if(ret == 0) ret = json_gen_obj_set_int(&jstr, "rssi", rssi);
-    if(ret == 0) ret = json_gen_obj_set_int64(&jstr, "payload_group", payload_group);
+    if(ret == 0) ret = json_gen_obj_set_int64(&jstr, "boot_time", boot_time);
+    if(ret == 0) ret = json_gen_obj_set_int64(&jstr, "payload_group", (int64_t)payload_group);
+    if(ret == 0) ret = json_gen_obj_set_int(&jstr, "sampling_time", sampling_time);
     if(ret == 0) ret = json_gen_obj_set_int(&jstr, "next_wakeup", next_wakeup);
+    if(ret == 0) ret = json_gen_obj_set_int(&jstr, "next_transmission", next_transmission);
 
     if(ret == 0) ret = json_gen_end_object(&jstr);
 
     return ret;
+}
+
+int json_generate_string(char* jstr, char* input_str)
+{
+    return json_gen_arr_set_string(&jstr, input_str);
 }

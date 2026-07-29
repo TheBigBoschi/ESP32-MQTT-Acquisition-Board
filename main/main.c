@@ -1,7 +1,8 @@
 #include "wifiLogin.h"
 #include "MQTT.h"
-#include "syncronization.h"
-#include "Static_data.h"
+#include "synchronization.h"
+#include "static_data.h"
+#include "serializer.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -20,11 +21,25 @@
 #include "esp_wifi.h"
 #include "wifiFastConnect.h"
 
+#include "WiFi.h"
+
+#include "time.h"
+#include "esp_sntp.h"
+
+#include "esp_adc/adc_oneshot.h"
+#include "esp_adc/adc_cali.h"
+#include "esp_adc/adc_cali_scheme.h"
+
 //########################## defines ##########################
 
 #define FACTORY_RESET_PIN           GPIO_NUM_21
 
+#define TRANSMISSION_PERIOD 120*60 //Time between transmission, defined in seconds
+#define TELEMETRY_STR_SIZE 250
+#define BATT_VOLTAGE_PIN ADC_CHANNEL_3
 
+#define ADC_CHANNEL  ADC_CHANNEL_3   // GPIO39 = SENSOR_VN = ADC1 CH3
+#define ADC_ATTEN    ADC_ATTEN_DB_11 // 150 mV ~ 3100 mV range
 
 
 //########################## global variables ##########################
@@ -32,12 +47,8 @@
 static const char *TAG = "WiFi_Body";
 EventGroupHandle_t xEventGroupHandle = NULL;
 SemaphoreHandle_t i2c_semaphore;
-
-//########################## structs definition ##########################
-
-
-
-
+RTC_DATA_ATTR time_t boot_time;
+RTC_DATA_ATTR time_t last_transmission_time;
 
 //########################## functions definition ##########################
 
@@ -53,6 +64,8 @@ void reset_pin_init()
     };
     gpio_config(&Factory_Reset_Pin);
 }
+
+
 
 /**
  * @brief When called, checks if FACTORY_RESET_PIN is being held down
@@ -80,13 +93,58 @@ void reset_pin_check()
 
 void app_main(void)
 {
-    xEventGroupHandle = xEventGroupCreate();
-    i2c_semaphore = xSemaphoreCreateMutex();
+    
+    if(esp_rom_get_reset_reason(0) != RESET_REASON_CORE_DEEP_SLEEP)
+    {
+        //probable loss of power.
+
+        //Connect to wifi
+        time_t now;
+
+        wifi_init_connection();
+        wifi_set_time();
+        time(&now);
+        boot_time = now;    //Tracks when the system initially got online
+        last_transmission_time = now;   //Wait for the buffer to fill before sending data
+
+    }
+    else
+    {
+        //Read sensors
+        //manage readings
+        //if transmitting == yes
+        //  transmit
+        //else
+        //  sleep
+
+        EventBits_t error_mask;
+        time_t now;
+        float batt_voltage;
+
+        sps30_task_param_t sps30_meas;
+        ltr390_task_param_t ltr390_meas;
+        sht40_task_param_t sht40_meas;
+        bmp280_task_param_t bmp280_meas;
         
-    sps30_task_param_t sps30_meas;
-    ltr390_task_param_t ltr390_meas;
-    sht40_task_param_t sht40_meas;
-    bmp280_task_param_t bmp280_meas;
+        read_sensors(&sps30_meas, &ltr390_meas, &sht40_meas, &bmp280_meas, &error_mask);
+        time(&now);
+        store_data(&sps30_meas, &ltr390_meas, &sht40_meas, &bmp280_meas, error_mask,now);
+
+        if(now > last_transmission_time + TRANSMISSION_PERIOD)
+        {
+            time_t time_now;
+            time(time_now);
+
+            // Invoke transmission manager to send the data. it takes care of everything internally
+            //json_generate_telemetry(telemetry_str,TELEMETRY_STR_SIZE,time_now,);
+            // CAll transmission manager directly
+        }
+
+
+    }
+
+    //
+
     char pub_str[128];
 
     //Initialize NVS
@@ -98,24 +156,6 @@ void app_main(void)
     ESP_ERROR_CHECK(ret);
     
 /*
-    // Minimal network stack init (required by WiFi)
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-
-    // Create default STA interface
-    esp_netif_create_default_wifi_sta();
-
-    // Init WiFi driver
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-
-    // Required before calling esp_wifi_get_config()
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-
-    // Read stored configuration
-    wifi_config_t config;
-    memset(&config, 0, sizeof(config));
-
     reset_pin_init();
     reset_pin_check();
 
@@ -184,9 +224,7 @@ void app_main(void)
     */
             while(1)
     {
-        EventBits_t error_mask;
-        read_sensors(&sps30_meas, &ltr390_meas, &sht40_meas, &bmp280_meas, &error_mask);
-        store_data(&sps30_meas, &ltr390_meas, &sht40_meas, &bmp280_meas, error_mask,0);
+
         
         
     }

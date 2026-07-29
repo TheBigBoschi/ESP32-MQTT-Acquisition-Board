@@ -1,12 +1,14 @@
 idf_component_register(
     SRCS 
         "Communication/MQTT.c"
-        "Communication/Serializer.c"
+        "Communication/serializer.c"
+        "Communication/transmission_manager.c"
         "main.c"
-        "Static_data.c"
+        "WiFi.c"
+        "static_data.c"
         "WiFi/wifiLogin.c"
         "WiFi/wifiFastConnect.c"
-        "sensors_interfaces/syncronization.c"
+        "sensors_interfaces/synchronization.c"
         "sensors_interfaces/sps30.c"
         "sensors_interfaces/ltr390.c"
         "sensors_interfaces/sht40.c"

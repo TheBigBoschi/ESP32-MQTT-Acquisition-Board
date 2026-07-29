@@ -1,6 +1,6 @@
 #include <stdint.h>
 #include <sht40.h>
-#include <syncronization.h>
+#include <synchronization.h>
 #include <stdbool.h>
 #include <driver/i2c_master.h>
 #include <freertos/FreeRTOS.h>

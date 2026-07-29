@@ -164,14 +164,6 @@ esp_err_t WiFi_Get_Status(wifi_status_t* status)
     return wifi_manager_get_status(status);
 }
 
-/*
-void WiFi_Factory_Reset()
-{
-    wifi_manager_init();
-    ESP_LOGW("wifi_manager","wifi_manager_factory_reset called");
-    wifi_manager_factory_reset();
-}
-    */
 void WiFi_Factory_Reset()
 {
     wifi_manager_factory_reset();

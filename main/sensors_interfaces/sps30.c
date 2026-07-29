@@ -4,7 +4,7 @@
 
 #include <stdint.h>
 #include "sps30.h"
-#include "syncronization.h"
+#include "synchronization.h"
 #include <driver/i2c_master.h>
 #include <string.h>
 #include <freertos/FreeRTOS.h>

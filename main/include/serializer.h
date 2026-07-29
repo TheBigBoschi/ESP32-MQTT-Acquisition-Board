@@ -1,5 +1,5 @@
-#ifndef JSON_H_
-#define JSON_H_
+#ifndef SERIALIZER_H_
+#define SERIALIZER_H_
 
 #include <stdint.h>
 #include <time.h>
@@ -26,7 +26,7 @@
  *       - To retrieve original value: stored_value / 100.0
  *       - Example: stored value 2350 = 23.50 (original units)
  */
-uint8_t generate_data_json(char* output_str, int output_str_size, rtc_data* data, uint8_t members);
+uint8_t json_generate_data(char* output_str, int output_str_size, rtc_data* data, uint8_t members);
 
 /**
  * @brief Generates a JSON object containing device telemetry information.
@@ -50,14 +50,31 @@ uint8_t generate_data_json(char* output_str, int output_str_size, rtc_data* data
  *       "rssi" (int), "payload_group" (int64), and "next_wakeup" (int64).
  *       Generation stops on first error; remaining fields are not added.
  */
-int generate_telemetry_json(
+int json_generate_telemetry(
     char* output_str,
     int output_str_size,
     time_t time,
     char* ID,
     float Vbatt,
     int rssi,
+    time_t boot_time,
     int32_t payload_group,
     int16_t next_wakeup);
+
+/**
+ * @brief Adds a string element to a JSON array being constructed.
+ * 
+ * Appends a string value to the current JSON array in the generator context.
+ * This function is used when building arrays of string values in JSON output.
+ * 
+ * @param[in,out] jstr Pointer to JSON generator string context
+ * @param[in] input_str Null-terminated string to add to the JSON array
+ * 
+ * @return 0 on success, non-zero error code if adding string to array fails
+ * 
+ * @note This function must be called between json_gen_push_array() and 
+ *       json_gen_pop_array() calls to properly add elements to an array.
+ */
+int json_generate_string(char* jstr, char* input_str);
 
 #endif

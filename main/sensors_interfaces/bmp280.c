@@ -1,5 +1,5 @@
 #include <bmp280.h>
-#include "syncronization.h"
+#include "synchronization.h"
 #include "esp_log.h"
 
 

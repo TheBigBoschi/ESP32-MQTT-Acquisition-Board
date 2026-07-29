@@ -1,4 +1,28 @@
 dependencies:
+  espressif/adc_battery_estimation:
+    component_hash: 878dd59e1bb60de314d5ecb52dce7e59a83598a41bf48cdbdec60e08e2bb907d
+    dependencies:
+    - name: espressif/cmake_utilities
+      registry_url: https://components.espressif.com
+      require: private
+      version: '*'
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 0.2.2
+  espressif/cmake_utilities:
+    component_hash: 05165f30922b422b4b90c08845e6d449329b97370fbd06309803d8cb539d79e3
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.1'
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    version: 1.1.1
   espressif/jsmn:
     component_hash: d80350c41bbaa827c98a25b6072df00884e72f54885996fab4a4f0aebce6b6c3
     dependencies:
@@ -30,7 +54,7 @@ dependencies:
       type: service
     version: 1.0.3
   espressif/mdns:
-    component_hash: 291732b5df4d181eb75eba9042799a508c4c124503a0c0573132a0a48d2e3fbe
+    component_hash: e81ca7a7f53ea34e78274df054da692c272e1315572876b237b1748e267c013b
     dependencies:
     - name: idf
       require: private
@@ -38,7 +62,7 @@ dependencies:
     source:
       registry_url: https://components.espressif.com
       type: service
-    version: 1.11.2
+    version: 1.11.3
   espressif/mqtt:
     component_hash: ffdad5659706b4dc14bc63f8eb73ef765efa015bf7e9adf71c813d52a2dc9342
     dependencies:
@@ -77,6 +101,22 @@ dependencies:
       registry_url: https://components.espressif.com
       type: service
     version: 1.2.7
+  michmich/esp-idf-wifi-provisioner:
+    component_hash: 95e5fb0df39008e6ac1b776e3ab3019bbec17eeedb29aa53648dfd0fb8d81de5
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    targets:
+    - esp32
+    - esp32s2
+    - esp32s3
+    - esp32c3
+    - esp32c6
+    version: 0.2.1
   tuanpmt/esp_bus:
     component_hash: e78c5ae0f388a278258e4c7ca15b7e6a937e6aca0228ff49686836d2724c4727
     dependencies:
@@ -121,12 +161,14 @@ dependencies:
     - esp32h2
     version: 1.1.0
 direct_dependencies:
+- espressif/adc_battery_estimation
 - espressif/json_generator
 - espressif/json_parser
 - espressif/mqtt
 - idf
 - k0i05/esp_ltr390uv
+- michmich/esp-idf-wifi-provisioner
 - tuanpmt/esp_wifi_manager
-manifest_hash: 31d9a1d987c2639f85b960a87c63fb4294a27c7c1d2f18f97cd6ed3d30664624
+manifest_hash: 233ff729832b068bb87ab90c59541a1486847ebfb1b07986bb6d6d272b14475b
 target: esp32
 version: 2.0.0

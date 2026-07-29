@@ -1,6 +1,6 @@
 
-#ifndef SYNCRONIZATION_H_
-#define SYNCRONIZATION_H_
+#ifndef SYNCHRONIZATION_H_
+#define SYNCHRONIZATION_H_
 
 
 
@@ -20,7 +20,7 @@ void read_sensors(sps30_task_param_t *sps30_task_param, ltr390_task_param_t *ltr
 
 
 
-#endif // SYNCRONIZATION_H_
+#endif // SYNCHRONIZATION_H_
   
 
 

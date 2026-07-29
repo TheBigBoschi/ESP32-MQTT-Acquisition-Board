@@ -1,6 +1,6 @@
 #include <ltr390.h>
 #include <ltr390uv.h>
-#include "syncronization.h"
+#include "synchronization.h"
 
 
 void read_ltr390_task(void *pvParameters)
