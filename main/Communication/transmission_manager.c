@@ -11,10 +11,10 @@
 #include <freertos/task.h>
 #include <freertos/event_groups.h>
 #include <esp_mac.h>
+#include "esp_wifi_types.h"
+#include "esp_wifi.h"
 
-#include "esp_adc/adc_oneshot.h"
-#include "esp_adc/adc_cali.h"
-#include "esp_adc/adc_cali_scheme.h"
+#include "adc_battery_estimation.h"
 
 #define CONFIG_BROKER_URI "mqtt://192.168.1.20:1883"
 #define CONFIG_BROKER_USERNAME "esp32"
@@ -28,8 +28,15 @@
 #define MQTT_DATA_STR_SIZE 3000             //calculated for a max of 24 samples in one go, with some space to spare
 #define MQTT_TELEMETRY_STR_SIZE 250         //realistically 120 characters whould be enough, but memory is cheap.
 
-#define ADC_CHANNEL  ADC_CHANNEL_3   // GPIO39 = SENSOR_VN = ADC1 CH3
-#define ADC_ATTEN    ADC_ATTEN_DB_12 // 150 mV ~ 3100 mV range
+//Battery SOC estimation
+
+#define TEST_ADC_UNIT (ADC_UNIT_1)
+#define TEST_ADC_BITWIDTH (ADC_BITWIDTH_DEFAULT)
+#define TEST_ADC_ATTEN (ADC_ATTEN_DB_12)
+#define TEST_ADC_CHANNEL (ADC_CHANNEL_3)
+#define TEST_RESISTOR_UPPER (100000)
+#define TEST_RESISTOR_LOWER (100000)
+#define TEST_ESTIMATION_TIME (50)
 
 static const char *TAG = "transmission_manager";
 
@@ -55,88 +62,29 @@ typedef struct{
 
 //Read battery voltage in mV
 //NB using the standard PCB you have to toggle 3.3V_E high to enable the voltage divider.
-esp_err_t read_battery_voltage(int* voltage)
+esp_err_t read_battery_SOC(int* SOC)
 {
-    esp_err_t ret;
-    adc_oneshot_unit_handle_t adc1_handle;
-    adc_oneshot_unit_init_cfg_t init_cfg = {
-        .unit_id = ADC_UNIT_1,
-    };
-    
-    adc_oneshot_new_unit(&init_cfg, &adc1_handle);
-
-    adc_oneshot_chan_cfg_t chan_cfg = {
-        .atten    = ADC_ATTEN,
-        .bitwidth = ADC_BITWIDTH_DEFAULT, // highest available bitwidth
-    };
-    ret = adc_oneshot_config_channel(adc1_handle, ADC_CHANNEL, &chan_cfg);
-
-    adc_cali_handle_t cali_handle = NULL;
-    bool calibrated = false;
-
-#if ADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED
-    // Preferred scheme (ESP32-S2, ESP32-S3, ESP32-C3, etc.)
-    adc_cali_curve_fitting_config_t cali_cfg = {
-        .unit_id  = ADC_UNIT_1,
-        .chan     = ADC_CHANNEL,
-        .atten    = ADC_ATTEN,
-        .bitwidth = ADC_BITWIDTH_DEFAULT,
-    };
-    if(ret != ESP_OK)
-        return ret;
-    if ((ret = adc_cali_create_scheme_curve_fitting(&cali_cfg, &cali_handle)) == ESP_OK) {
-        calibrated = true;
-        ESP_LOGI(TAG, "Calibration: Curve Fitting");
-    }
-#endif
-
-#if ADC_CALI_SCHEME_LINE_FITTING_SUPPORTED
-    // Fallback scheme (ESP32, ESP32-S2)
-    if (!calibrated) {
-        adc_cali_line_fitting_config_t cali_cfg = {
-            .unit_id  = ADC_UNIT_1,
-            .atten    = ADC_ATTEN,
-            .bitwidth = ADC_BITWIDTH_DEFAULT,
+    adc_battery_estimation_t config = {
+            .internal = {
+                .adc_unit = TEST_ADC_UNIT,
+                .adc_bitwidth = TEST_ADC_BITWIDTH,
+                .adc_atten = TEST_ADC_ATTEN,
+            },
+            .adc_channel = TEST_ADC_CHANNEL,
+            .lower_resistor = TEST_RESISTOR_LOWER,
+            .upper_resistor = TEST_RESISTOR_UPPER,
         };
-        if(ret != ESP_OK)
-            return ret;
-        if ((ret = adc_cali_create_scheme_line_fitting(&cali_cfg, &cali_handle)) == ESP_OK) {
-            calibrated = true;
-            ESP_LOGI(TAG, "Calibration: Line Fitting");
-        }
-    }
-#endif
 
+    adc_battery_estimation_handle_t adc_battery_estimation_handle = adc_battery_estimation_create(&config);
 
-    //Averages the readings to improve accuracy
-    int raw = 0;
-    int accumulator = 0;
-    for(int i = 0; i < 32; i++)
-    {
+    esp_err_t ret = ESP_OK;
+    float capacity = 0;
+    ret = adc_battery_estimation_get_capacity(adc_battery_estimation_handle, &capacity);
+    *SOC = (int)capacity;
+    printf("Battery capacity: %d\n", *SOC);
+    
+    if (ret == ESP_OK) ret = adc_battery_estimation_destroy(adc_battery_estimation_handle);
 
-        if(ret == ESP_OK) ret = adc_oneshot_read(adc1_handle, ADC_CHANNEL, &raw);
-        accumulator += raw;
-        vTaskDelay(pdMS_TO_TICKS(1));
-    }
-
-    if (calibrated)
-    {
-        int voltage_mv = 0;
-        if(ret == ESP_OK) ret = adc_cali_raw_to_voltage(cali_handle, accumulator, &voltage_mv);
-        *voltage = (voltage_mv / 32)*2450/4096;
-    }
-    else
-        *voltage = (accumulator / 32)*2450/4096;
-
-    //--- 5. Teardown ---
-    ESP_ERROR_CHECK(adc_oneshot_del_unit(adc1_handle));
-    if (calibrated) {
-#if ADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED
-        if(ret == ESP_OK) ret = adc_cali_delete_scheme_curve_fitting(cali_handle);
-#elif ADC_CALI_SCHEME_LINE_FITTING_SUPPORTED
-        if(ret == ESP_OK) ret = adc_cali_delete_scheme_line_fitting(cali_handle);
-#endif
-    }
     return ret;
 }
 
@@ -165,7 +113,7 @@ static void mqtt_cmd_consumer_task(void* pvParameters)
         }
         else if(strstr(queue_element->str,"RETRANSMIT") != NULL)  //The string RETRANSMIT is present in the message. 
         {
-            time_t init_time, end_time;
+            long int init_time, end_time;
             rtc_data_t rtc_data[24];
 
             if(sscanf(queue_element->str,"RETRANSMIT %ld - %ld", &init_time, &end_time) == 2)
@@ -176,19 +124,19 @@ static void mqtt_cmd_consumer_task(void* pvParameters)
                     if(ret == 0)
                     {
                         //json_generate_data(data_str,3000,rtc_data,ret);
-                        json_generate_string(data_str,"NO_DATA");
+                        json_generate_string(data_str, MQTT_CONSUMER_OUT_STR_SIZE, "NO_DATA");
                         esp_mqtt_client_publish(task_params->mqtt_handle,topic,data_str,0,1,0);
                         break;
                     }
                     else if(ret <=24)
                     {
-                        json_generate_data(data_str,3000,rtc_data,ret);
+                        json_generate_data(data_str,MQTT_CONSUMER_OUT_STR_SIZE,rtc_data,ret);
                         esp_mqtt_client_publish(task_params->mqtt_handle,topic,data_str,0,1,0);
                         break;
                     }
                     else
                     {
-                        json_generate_data(data_str,3000,rtc_data,RTC_DATA_RETRANSMISSION_SAMPLES_COUNT);
+                        json_generate_data(data_str,MQTT_CONSUMER_OUT_STR_SIZE,rtc_data,RTC_DATA_RETRANSMISSION_SAMPLES_COUNT);
                         esp_mqtt_client_publish(task_params->mqtt_handle,topic,data_str,0,1,0);
                         init_time = rtc_data[23].time+1;         
                     }
@@ -346,13 +294,13 @@ esp_err_t transmission_manager(uint8_t sample_number, time_t boot_time, int32_t 
 
     time(&time_now);
     sprintf(MAC_str,MACSTR, MAC2STR(MAC));
-    int Vbatt;
+    int SOC;
     int rssi;
 
-    if(ret == ESP_OK) ret = read_battery_voltage(&Vbatt);
+    if(ret == ESP_OK) ret = read_battery_SOC(&SOC);
     esp_wifi_sta_get_rssi(&rssi);
 
-    if(ret == ESP_OK) ret = json_generate_telemetry(telemetry_str, MQTT_TELEMETRY_STR_SIZE, time_now, MAC_str,Vbatt,rssi, boot_time,payload_group, next_wakeup);
+    if(ret == ESP_OK) ret = json_generate_telemetry(telemetry_str, MQTT_TELEMETRY_STR_SIZE, time_now, MAC_str,SOC,rssi, boot_time,payload_group, next_wakeup);
 
     if(ret == ESP_OK) ret = esp_mqtt_client_publish(mqtt_handle,data_topic, data_str, 0, 1, 0);
 
@@ -385,10 +333,10 @@ esp_err_t transmission_manager(uint8_t sample_number, time_t boot_time, int32_t 
 cleanup:
     // Cleanup in REVERSE order of allocation
     if(mqtt_queue != NULL)
-        xQueueDelete(mqtt_queue);
+        vQueueDelete(mqtt_queue);
     
     if(event_group_handle != NULL)
-        xEventGroupDelete(event_group_handle);
+        vEventGroupDelete(event_group_handle);
     
     if(mqtt_handle != NULL)
         esp_mqtt_client_destroy(mqtt_handle);

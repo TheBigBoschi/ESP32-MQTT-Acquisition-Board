@@ -1,5 +1,4 @@
 
-#include "wifiLogin.h"
 #include "MQTT.h"
 
 #include <stdio.h>
@@ -8,7 +7,6 @@
 #include "freertos/task.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
-#include "esp_wifi_manager.h"
 #include "nvs.h"
 #include "nvs_flash.h"
 #include "mqtt_client.h"

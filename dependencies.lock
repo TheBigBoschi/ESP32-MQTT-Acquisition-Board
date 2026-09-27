@@ -53,16 +53,6 @@ dependencies:
       registry_url: https://components.espressif.com/
       type: service
     version: 1.0.3
-  espressif/mdns:
-    component_hash: e81ca7a7f53ea34e78274df054da692c272e1315572876b237b1748e267c013b
-    dependencies:
-    - name: idf
-      require: private
-      version: '>=5.0'
-    source:
-      registry_url: https://components.espressif.com
-      type: service
-    version: 1.11.3
   espressif/mqtt:
     component_hash: ffdad5659706b4dc14bc63f8eb73ef765efa015bf7e9adf71c813d52a2dc9342
     dependencies:
@@ -76,7 +66,7 @@ dependencies:
   idf:
     source:
       type: idf
-    version: 5.5.2
+    version: 6.1.0
   k0i05/esp_ltr390uv:
     component_hash: 4537bb42a98845426739a276a7dd3b8c395007d9ebc61388a7e5b685d938907d
     dependencies:
@@ -117,49 +107,6 @@ dependencies:
     - esp32c3
     - esp32c6
     version: 0.2.1
-  tuanpmt/esp_bus:
-    component_hash: e78c5ae0f388a278258e4c7ca15b7e6a937e6aca0228ff49686836d2724c4727
-    dependencies:
-    - name: idf
-      require: private
-      version: '>=5.0'
-    source:
-      registry_url: https://components.espressif.com
-      type: service
-    targets:
-    - esp32
-    - esp32s2
-    - esp32s3
-    - esp32c2
-    - esp32c3
-    - esp32c6
-    - esp32h2
-    version: 1.0.3
-  tuanpmt/esp_wifi_manager:
-    component_hash: 5a3c919c6679dbe8a39f3af8254b722c58d5e3aa6dfa3e8663e6d90eea035ab9
-    dependencies:
-    - name: espressif/mdns
-      registry_url: https://components.espressif.com
-      require: private
-      version: ^1.2
-    - name: idf
-      require: private
-      version: '>=5.0.0'
-    - name: tuanpmt/esp_bus
-      registry_url: https://components.espressif.com
-      require: private
-      version: ^1.0.3
-    source:
-      registry_url: https://components.espressif.com/
-      type: service
-    targets:
-    - esp32
-    - esp32s2
-    - esp32s3
-    - esp32c3
-    - esp32c6
-    - esp32h2
-    version: 1.1.0
 direct_dependencies:
 - espressif/adc_battery_estimation
 - espressif/json_generator
@@ -168,7 +115,6 @@ direct_dependencies:
 - idf
 - k0i05/esp_ltr390uv
 - michmich/esp-idf-wifi-provisioner
-- tuanpmt/esp_wifi_manager
-manifest_hash: 233ff729832b068bb87ab90c59541a1486847ebfb1b07986bb6d6d272b14475b
+manifest_hash: 091bc5a18b6c3802293fd593ccd697266958c5fc3ec47c3a110ea83e977921dd
 target: esp32
-version: 2.0.0
+version: 3.0.0

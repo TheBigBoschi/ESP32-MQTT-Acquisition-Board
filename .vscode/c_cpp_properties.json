@@ -1,25 +1,25 @@
 {
-  "configurations": [
-    {
-      "name": "ESP-IDF",
-      "compilerPath": "/home/boschi/.espressif/tools/xtensa-esp-elf/esp-14.2.0_20251107/xtensa-esp-elf/bin/xtensa-esp32-elf-gcc",
-      "compileCommands": [
-        "${config:idf.buildPath}/compile_commands.json"
-      ],
-      "intelliSenseMode": "gcc-arm",
-      "includePath": [
-        "${config:idf.espIdfPath}/components/**",
-        "${workspaceFolder}/**",
-        "${workspaceFolder}/managed_components/tuanpmt__esp_wifi_manager/include"
-      ],
-      "browse": {
-        "path": [
-          "${config:idf.espIdfPath}/components",
-          "${workspaceFolder}"
-        ],
-        "limitSymbolsToIncludedHeaders": true
-      }
-    }
-  ],
-  "version": 4
+    "configurations": [
+        {
+            "name": "ESP-IDF",
+            "compilerPath": "/home/boschi/.espressif/tools/xtensa-esp-elf/esp-15.2.0_20251204/xtensa-esp-elf/bin/xtensa-esp32-elf-gcc",
+            "compileCommands": [
+                "${config:idf.buildPath}/compile_commands.json"
+            ],
+            "intelliSenseMode": "gcc-arm",
+            "includePath": [
+                "${config:idf.espIdfPath}/components/**",
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/managed_components/tuanpmt__esp_wifi_manager/include"
+            ],
+            "browse": {
+                "path": [
+                    "${config:idf.espIdfPath}/components",
+                    "${workspaceFolder}"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            }
+        }
+    ],
+    "version": 4
 }

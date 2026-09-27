@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include <time.h>
-#include <Static_data.h>
+#include <static_data.h>
 
 /**
  * @brief Generates a JSON payload containing sensor data arrays.
@@ -26,7 +26,7 @@
  *       - To retrieve original value: stored_value / 100.0
  *       - Example: stored value 2350 = 23.50 (original units)
  */
-uint8_t json_generate_data(char* output_str, int output_str_size, rtc_data* data, uint8_t members);
+uint8_t json_generate_data(char* output_str, int output_str_size, rtc_data_t* data, uint8_t members);
 
 /**
  * @brief Generates a JSON object containing device telemetry information.
@@ -75,6 +75,6 @@ int json_generate_telemetry(
  * @note This function must be called between json_gen_push_array() and 
  *       json_gen_pop_array() calls to properly add elements to an array.
  */
-int json_generate_string(char* jstr, char* input_str);
+int json_generate_string(char* jstr, int buff_size, char* input_str);
 
 #endif

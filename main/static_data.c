@@ -71,17 +71,17 @@ int get_data_sample_number(rtc_data_t* rtc_data_pointer, uint8_t sample_number)
     if(sample_number >= RTC_DATA_SIZE)
         return 0;
 
-    rtc_data_t* data[] = get_raw_data();
+    rtc_data_t* data = get_raw_data();
     memcpy(rtc_data_pointer,data,sizeof(rtc_data_t)*sample_number);
     return 1;
 }
 
 int get_data_interval(time_t interval_t_beginning, time_t interval_t_end, rtc_data_t* rtc_data_pointer, int size)
 {
-    rtc_data_t* data[] = get_raw_data();
+    rtc_data_t* data = get_raw_data();
     int16_t index = rtc_data_array_latest_index;
-    time_t min_time = data[0]->time;
-    time_t max_time = data[0]->time;
+    time_t min_time = data[0].time;
+    time_t max_time = data[0].time;
     uint8_t min_time_index = 255;
     uint8_t max_time_index = 255;
     uint8_t first_element;
@@ -92,25 +92,25 @@ int get_data_interval(time_t interval_t_beginning, time_t interval_t_end, rtc_da
     //Check if the data requested is available in memory
     for(uint8_t i = 0; i < 100; i++)
     {
-        if(data[i]->time >= interval_t_beginning)
+        if(data[i].time >= interval_t_beginning)
         {
-            min_time = data[i]->time;
+            min_time = data[i].time;
             min_time_index = i;
             break;
         }
-        if(data[i]->time == 0)
+        if(data[i].time == 0)
             break;
     }
 
     for(uint8_t i = 0; i < 100; i++)
     {
-        if(data[i]->time >= interval_t_end)
+        if(data[i].time >= interval_t_end)
         {
-            max_time = data[i]->time;
+            max_time = data[i].time;
             max_time_index = i;
             break;
         }
-        if(data[i]->time == 0)
+        if(data[i].time == 0)
             break;
             
     }
@@ -121,7 +121,7 @@ int get_data_interval(time_t interval_t_beginning, time_t interval_t_end, rtc_da
     //At least some data available in memory. Looks for it and copies the values in the argument array
 
     uint8_t elements = max_time_index - min_time_index;
-     
+    
     memcpy(rtc_data_pointer,&data[min_time_index], sizeof(rtc_data_t)*(elements>size?size:elements));
     return elements;
 }

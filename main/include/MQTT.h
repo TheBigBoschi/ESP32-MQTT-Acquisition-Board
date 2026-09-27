@@ -1,6 +1,8 @@
 #ifndef MQTT_H
 #define MQTT_H
 
+#include <esp_event.h>
+
 void log_error_if_nonzero(const char *message, int error_code);
 
 void MQTT_Config();

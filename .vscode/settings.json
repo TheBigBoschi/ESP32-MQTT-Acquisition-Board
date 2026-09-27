@@ -6,7 +6,7 @@
     "interface/ftdi/esp_ftdi.cfg",
     "target/esp32.cfg"
   ],
-  "idf.port": "/dev/ttyUSB0",
+  "idf.port": "/dev/ttyUSB1",
   "idf.toolsPath": "/home/boschi/.espressif",
   "idf.customExtraVars": {
     "IDF_TARGET": "esp32"
@@ -30,5 +30,5 @@
         "CMAKE_TOOLCHAIN_FILE": "/home/boschi/.espressif/v5.5.2/esp-idf/tools/cmake/toolchain-esp32.cmake",
         "PYTHON": "/home/boschi/.espressif/python_env/idf5.5_py3.14_env/bin/python"
     },
-    "idf.currentSetup": "/home/boschi/.espressif/v5.5.2/esp-idf"
+    "idf.currentSetup": "/home/boschi/.espressif/v6.1/esp-idf"
 }

@@ -6,7 +6,6 @@ idf_component_register(
         "main.c"
         "WiFi.c"
         "static_data.c"
-        "WiFi/wifiLogin.c"
         "WiFi/wifiFastConnect.c"
         "sensors_interfaces/synchronization.c"
         "sensors_interfaces/sps30.c"
@@ -23,5 +22,4 @@ idf_component_register(
         nvs_flash
         mqtt
         esp_driver_gpio
-        tuanpmt__esp_bus
 )

@@ -110,7 +110,7 @@ esp_err_t transmission_manager(uint8_t sample_number, time_t boot_time,
  * 
  * @see transmission_manager()
  */
-esp_err_t read_battery_voltage(int* voltage);
+esp_err_t read_battery_SOC(int* SOC);
 
 #ifdef __cplusplus
 }

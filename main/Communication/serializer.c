@@ -1,5 +1,5 @@
 #include <time.h>
-#include <Static_data.h>
+#include <static_data.h>
 #include <json_generator.h>
 
 /**
@@ -144,7 +144,10 @@ int json_generate_telemetry(
     return ret;
 }
 
-int json_generate_string(char* jstr, char* input_str)
+int json_generate_string(char* jstr, int buff_size, char* input_str)
 {
-    return json_gen_arr_set_string(&jstr, input_str);
+    json_gen_str_t json_gen_str;
+    json_gen_str.buf = jstr;
+    json_gen_str.buf_size = buff_size;
+    return json_gen_arr_set_string(&json_gen_str, input_str);
 }
