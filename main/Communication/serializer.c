@@ -56,10 +56,6 @@ uint8_t json_generate_data(char* output_str, int output_str_size, rtc_data_t* da
     for(i = 0; i < members; i++) if(ret == 0) ret = json_gen_arr_set_int(&jstr, data[i].pressure);
     json_gen_pop_array(&jstr);
 
-    json_gen_push_array(&jstr, "payload_group");
-    for(i = 0; i < members; i++) if(ret == 0) ret = json_gen_arr_set_int(&jstr, data[i].payload_group);
-    json_gen_pop_array(&jstr);
-
     json_gen_push_array(&jstr, "errors");
     for(i = 0; i < members; i++) if(ret == 0) ret = json_gen_arr_set_int(&jstr, data[i].errors);
     json_gen_pop_array(&jstr);

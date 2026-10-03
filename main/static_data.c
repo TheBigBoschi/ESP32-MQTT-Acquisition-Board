@@ -41,7 +41,6 @@ void check_data()
             rtc_data_array[i].PM10p0 = 0;
             rtc_data_array[i].temperature = 0;
             rtc_data_array[i].pressure = 0;
-            rtc_data_array[i].payload_group = 0;
             rtc_data_array[i].errors = 0;
             rtc_data_array[i].ambient_light = 0;
             rtc_data_array[i].uvi = 0;
@@ -159,10 +158,11 @@ void store_data(sps30_task_param_t *sps30_task_param, ltr390_task_param_t *ltr39
     data[0].PM2p5 = sps30_task_param->sps30_measurement.MC2p5;
     data[0].PM10p0 = sps30_task_param->sps30_measurement.MC10p0;;
     data[0].temperature = sht40_task_param->temperature;
-    data[0].pressure = bmp280_task_param->avg_pressure;
+    data[0].pressure = bmp280_task_param->avg_pressure/256;
     data[0].errors = error_mask;
     data[0].ambient_light = ltr390_task_param->ambient_light;
     data[0].uvi = ltr390_task_param->uvi;
     data[0].humidity = sht40_task_param->humidity;
-    
-}
+    data[0].board_temperature = bmp280_task_param->avg_temperature/100;
+
+}uint32_t measurement_group;

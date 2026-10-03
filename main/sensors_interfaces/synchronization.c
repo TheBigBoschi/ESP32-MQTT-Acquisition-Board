@@ -10,8 +10,10 @@
 
 //########################## I2C Configuration ##########################
 #define I2C_PORT                    I2C_NUM_0
-#define SDA_GPIO                    GPIO_NUM_23
-#define SCL_GPIO                    GPIO_NUM_22
+#define SDA_GPIO                    GPIO_NUM_5
+#define SCL_GPIO                    GPIO_NUM_4
+
+#define LED_PIN             GPIO_NUM_0
 
 //########################## Sensor Readings Configuration ##########################
 
@@ -117,28 +119,31 @@ void read_sensors(sps30_task_param_t *sps30_task_param, ltr390_task_param_t *ltr
     bmp280_task_param->event_group = &event_group;
 
     ESP_LOGI("SENSOR SYNC", "Creating Tasks");
+    gpio_set_level(LED_PIN, 1); // Turn on the LED to indicate task creation
+
     xTaskCreate(read_sps30_task,"SPS30 reader task",4096,(void*)sps30_task_param,3,NULL);
     xTaskCreate(read_sht40_task,"SHT40 reader task",4096,(void*)sht40_task_param,3,NULL);
     xTaskCreate(read_bmp280_task,"BMP280 reader task",4096,(void*)bmp280_task_param,3,NULL);
     
+    gpio_set_level(LED_PIN, 0); // Turn on the LED to indicate task creation
     ESP_LOGI("SENSOR SYNC", "Waiting for bits group");
     
     event_bits = xEventGroupWaitBits(
         event_group,
         1<<event_SHT40_read_ok |
-        1<<event_BMP280_read_ok |
-        1<<event_SPS30_read_ok,
+        1<<event_BMP280_read_ok,
+        //1<<event_SPS30_read_ok,
         pdFALSE,
         pdTRUE,
         pdMS_TO_TICKS(EVENTGROUP_WAIT_TIMEOUT_LONG));
-    vTaskDelay(pdMS_TO_TICKS(10));
-    ESP_LOGI("SENSOR SYNC", "Waiting for LR390");
+
+        ESP_LOGI("SENSOR SYNC", "Waiting for LR390");
 
     //Not ideal, but using the new and the old i2c driver togheter was not working, and I did not want to re-write this library too.
     //I wait for all the other i2c-using task to finish and then I read the LTR390, avoiding any mixup of i2c drivers.
-    xTaskCreate(read_ltr390_task,"LTR390 reader task",4096,(void*)ltr390_task_param,1,NULL);
+    //xTaskCreate(read_ltr390_task,"LTR390 reader task",4096,(void*)ltr390_task_param,1,NULL);
     
-    event_bits = xEventGroupWaitBits(event_group, 1<<event_LTR390_read_ok,pdFALSE,pdTRUE,pdMS_TO_TICKS(EVENTGROUP_WAIT_TIMEOUT_SHORT));
+    //event_bits = xEventGroupWaitBits(event_group, 1<<event_LTR390_read_ok,pdFALSE,pdTRUE,pdMS_TO_TICKS(EVENTGROUP_WAIT_TIMEOUT_SHORT));
 
     static const struct {
     const uint32_t mask;

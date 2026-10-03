@@ -12,7 +12,6 @@ float PM2p5;
 float PM10p0;         
 float temperature;    
 float pressure;       
-uint32_t payload_group;
 uint32_t errors;       
 uint16_t ambient_light;
 uint16_t uvi;          
