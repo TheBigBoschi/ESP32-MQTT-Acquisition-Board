@@ -1,4 +1,5 @@
 #include <time.h>
+#include <serializer.h>
 #include <static_data.h>
 #include <json_generator.h>
 
@@ -14,7 +15,7 @@
  * @param[in] data Pointer to array of sensor data structures to serialize
  * @param[in] members Number of data records to include in the JSON arrays
  * 
- * @return 0 on success, non-zero error code if JSON generation fails
+ * @return number of characters written to output_str on success, -1 on error if JSON generation fails
  * 
  * @note The function creates arrays for: time, PM2p5, PM10p0, temperature, pressure,
  *       payload_group, errors, ambient_light, uvi, humidity, and board_temperature.
@@ -36,49 +37,54 @@ uint8_t json_generate_data(char* output_str, int output_str_size, rtc_data_t* da
     //JSON payload generator. The floats value have been multiplied to 100 and casted to int
     //this allows me to reconstruct them to 1/100 of a unit precision, while saving me from dealing with all the floats decimals
 
-    json_gen_push_array(&jstr, "time");
+    if(ret == 0) ret = json_gen_push_array(&jstr, "time");
     for(i = 0; i < members; i++) if(ret == 0) ret = json_gen_arr_set_int64(&jstr, data[i].time);
-    json_gen_pop_array(&jstr);
+    if(ret == 0) ret = json_gen_pop_array(&jstr);
 
-    json_gen_push_array(&jstr, "PM2p5");
+    if(ret == 0) ret = json_gen_push_array(&jstr, "PM2p5");
     for(i = 0; i < members; i++) if(ret == 0) ret = json_gen_arr_set_int(&jstr, (int)(data[i].PM2p5*100));
-    json_gen_pop_array(&jstr);
+    if(ret == 0) ret = json_gen_pop_array(&jstr);
 
-    json_gen_push_array(&jstr, "PM10p0");
+    if(ret == 0) ret = json_gen_push_array(&jstr, "PM10p0");
     for(i = 0; i < members; i++) if(ret == 0) ret = json_gen_arr_set_int(&jstr, (int)(data[i].PM10p0*100));
-    json_gen_pop_array(&jstr);
+    if(ret == 0) ret = json_gen_pop_array(&jstr);
 
-    json_gen_push_array(&jstr, "temperature");
+    if(ret == 0) ret = json_gen_push_array(&jstr, "temperature");
     for(i = 0; i < members; i++) if(ret == 0) ret = json_gen_arr_set_int(&jstr, (int)(data[i].temperature*100));
-    json_gen_pop_array(&jstr);
+    if(ret == 0) ret = json_gen_pop_array(&jstr);
 
-    json_gen_push_array(&jstr, "pressure");
+    if(ret == 0) ret = json_gen_push_array(&jstr, "pressure");
     for(i = 0; i < members; i++) if(ret == 0) ret = json_gen_arr_set_int(&jstr, data[i].pressure);
-    json_gen_pop_array(&jstr);
+    if(ret == 0) ret = json_gen_pop_array(&jstr);
 
-    json_gen_push_array(&jstr, "errors");
+    if(ret == 0) ret = json_gen_push_array(&jstr, "errors");
     for(i = 0; i < members; i++) if(ret == 0) ret = json_gen_arr_set_int(&jstr, data[i].errors);
-    json_gen_pop_array(&jstr);
+    if(ret == 0) ret = json_gen_pop_array(&jstr);
  
-    json_gen_push_array(&jstr, "ambient_light");
+    if(ret == 0) ret = json_gen_push_array(&jstr, "ambient_light");
     for(i = 0; i < members; i++) if(ret == 0) ret = json_gen_arr_set_int(&jstr, data[i].ambient_light);
-    json_gen_pop_array(&jstr);
+    if(ret == 0) ret = json_gen_pop_array(&jstr);
  
-    json_gen_push_array(&jstr, "uvi");
+    if(ret == 0) ret = json_gen_push_array(&jstr, "uvi");
     for(i = 0; i < members; i++) if(ret == 0) ret = json_gen_arr_set_int(&jstr, data[i].uvi);
-    json_gen_pop_array(&jstr);
+    if(ret == 0) ret = json_gen_pop_array(&jstr);
  
-    json_gen_push_array(&jstr, "humidity");
+    if(ret == 0) ret = json_gen_push_array(&jstr, "humidity");
     for(i = 0; i < members; i++) if(ret == 0) ret = json_gen_arr_set_int(&jstr, (int)(data[i].humidity*100));
-    json_gen_pop_array(&jstr);
+    if(ret == 0) ret = json_gen_pop_array(&jstr);
      
-    json_gen_push_array(&jstr, "board_temperature");
+    if(ret == 0) ret = json_gen_push_array(&jstr, "board_temperature");
     for(i = 0; i < members; i++) if(ret == 0) ret = json_gen_arr_set_int(&jstr, (int)data[i].board_temperature);
-    json_gen_pop_array(&jstr);
+    if(ret == 0) ret = json_gen_pop_array(&jstr);
 
-    if(ret == 0) ret = json_gen_end_array(&jstr);
     if(ret == 0) ret = json_gen_end_object(&jstr);
- 
+
+    //if everything went fine, end the JSON string and return the total number of char, else return -1
+    if(ret == 0) 
+        ret = json_gen_str_end(&jstr);
+    else
+        ret = 0;
+
     return ret;
 }
 
@@ -96,9 +102,7 @@ uint8_t json_generate_data(char* output_str, int output_str_size, rtc_data_t* da
  * @param[in] Vbatt Battery voltage in volts
  * @param[in] rssi Received Signal Strength Indicator in dBm
  * @param[in] payload_group Payload group sequence number
- * @param[in] sampling_time Seconds between samples
  * @param[in] next_wakeup Seconds until next device wake-up
- * @param[in] next_transmission Seconds until the next transmission
  * 
  * @return 0 on success, non-zero error code if JSON generation fails
  * 
@@ -111,13 +115,12 @@ int json_generate_telemetry(
     int output_str_size,
     time_t time,
     char* ID,
-    float Vbatt,
+    uint8_t SOC,
     int rssi,
     time_t boot_time,
     int32_t payload_group,
-    int16_t sampling_time,
-    int16_t next_wakeup,
-    int16_t next_transmission)
+    int16_t next_wakeup
+)
 {
     json_gen_str_t jstr;
     int ret;
@@ -127,16 +130,19 @@ int json_generate_telemetry(
 
     if(ret == 0) ret = json_gen_obj_set_int64(&jstr, "time", time);
     if(ret == 0) ret = json_gen_obj_set_string(&jstr, "ID", ID);
-    if(ret == 0) ret = json_gen_obj_set_float(&jstr, "Vbatt", Vbatt);
+    if(ret == 0) ret = json_gen_obj_set_int(&jstr, "SOC", SOC);
     if(ret == 0) ret = json_gen_obj_set_int(&jstr, "rssi", rssi);
     if(ret == 0) ret = json_gen_obj_set_int64(&jstr, "boot_time", boot_time);
     if(ret == 0) ret = json_gen_obj_set_int64(&jstr, "payload_group", (int64_t)payload_group);
-    if(ret == 0) ret = json_gen_obj_set_int(&jstr, "sampling_time", sampling_time);
     if(ret == 0) ret = json_gen_obj_set_int(&jstr, "next_wakeup", next_wakeup);
-    if(ret == 0) ret = json_gen_obj_set_int(&jstr, "next_transmission", next_transmission);
 
     if(ret == 0) ret = json_gen_end_object(&jstr);
 
+    //if everything went fine, end the JSON string and return the total number of char, else return -1
+    if(ret == 0) 
+        ret = json_gen_str_end(&jstr);
+    else
+        ret = 0;
     return ret;
 }
 

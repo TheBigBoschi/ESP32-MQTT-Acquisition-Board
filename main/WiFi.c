@@ -38,6 +38,11 @@ void wifi_init_connection(void)
 
     ESP_LOGI(TAG, "Connected");
 }
+
+void wifi_deinit_connection(void)
+{
+    wifi_prov_stop();
+}
 /*
 * @brief retrieve the time from a SNTP server and initializes the RTC
 */

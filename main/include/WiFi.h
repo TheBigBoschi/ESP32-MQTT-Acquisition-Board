@@ -22,6 +22,11 @@
 void wifi_init_connection(void);
 
 /**
+ * @brief Stop the WiFi provisioning connection.
+ */
+void wifi_deinit_connection(void);
+
+/**
  * @brief Retrieve time from SNTP server and initialize the RTC
  * 
  * This function initializes SNTP (Simple Network Time Protocol) to synchronize

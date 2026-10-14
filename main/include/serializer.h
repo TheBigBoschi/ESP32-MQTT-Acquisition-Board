@@ -39,7 +39,7 @@ uint8_t json_generate_data(char* output_str, int output_str_size, rtc_data_t* da
  * @param[in] output_str_size Size of the output buffer in bytes
  * @param[in] time Unix timestamp of the telemetry measurement
  * @param[in] ID Device identifier string (null-terminated)
- * @param[in] Vbatt Battery voltage in volts
+ * @param[in] SOC Battery SOC in %
  * @param[in] rssi Received Signal Strength Indicator in dBm
  * @param[in] payload_group Payload group sequence number
  * @param[in] next_wakeup Seconds until next device wake-up
@@ -50,29 +50,31 @@ uint8_t json_generate_data(char* output_str, int output_str_size, rtc_data_t* da
  *       "rssi" (int), "payload_group" (int64), and "next_wakeup" (int64).
  *       Generation stops on first error; remaining fields are not added.
  */
+
 int json_generate_telemetry(
-    char* output_str,
+    char *output_str,
     int output_str_size,
     time_t time,
-    char* ID,
-    float Vbatt,
+    char *ID,
+    uint8_t SOC,
     int rssi,
     time_t boot_time,
     int32_t payload_group,
-    int16_t next_wakeup);
+    int16_t next_wakeup
+);
 
 /**
  * @brief Adds a string element to a JSON array being constructed.
- * 
+ *
  * Appends a string value to the current JSON array in the generator context.
  * This function is used when building arrays of string values in JSON output.
- * 
+ *
  * @param[in,out] jstr Pointer to JSON generator string context
  * @param[in] input_str Null-terminated string to add to the JSON array
- * 
+ *
  * @return 0 on success, non-zero error code if adding string to array fails
- * 
- * @note This function must be called between json_gen_push_array() and 
+ *
+ * @note This function must be called between json_gen_push_array() and
  *       json_gen_pop_array() calls to properly add elements to an array.
  */
 int json_generate_string(char* jstr, int buff_size, char* input_str);

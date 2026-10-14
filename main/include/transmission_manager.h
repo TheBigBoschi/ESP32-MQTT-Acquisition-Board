@@ -46,7 +46,7 @@ extern "C" {
  * @param[in] sample_number Number of samples to include in transmission
  * @param[in] boot_time Timestamp of device boot for telemetry
  * @param[in] payload_group Payload group identifier for tracking
- * @param[in] next_wakeup Scheduled time of next device wake/transmission
+ * @param[in] next_trasmission Scheduled time of next device transmission
  * 
  * @return esp_err_t
  *   - @c ESP_OK:                   Transmission successful; DATA_ACK received
@@ -68,7 +68,7 @@ extern "C" {
  * @see cmd_topic_event_handler()
  */
 esp_err_t transmission_manager(uint8_t sample_number, time_t boot_time, 
-                               int32_t payload_group, time_t next_wakeup);
+                               int32_t payload_group, time_t next_trasmission);
 
 /**
  * @brief Reads and calibrates the battery voltage via ADC
